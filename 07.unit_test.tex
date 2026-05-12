@@ -1,0 +1,32 @@
+% 07.unit_test.tex - 第6章 系统测试
+\section{系统测试}
+
+\subsection{测试环境}
+\begin{itemize}[nosep, leftmargin=2em]
+    \item 服务器: Tomcat 9.0
+    \item 浏览器: Chrome 120
+\end{itemize}
+
+\subsection{功能测试}
+\subsubsection{登录功能测试}
+测试用例及结果见表 \ref{tbl:login_test}。
+
+\begin{table}[H]
+    \centering
+    \caption{登录功能测试用例}
+    \label{tbl:login_test}
+    \begin{tabular}{cccl}
+        \toprule
+        用例编号 & 输入数据 & 预期结果 & 实际结果 \\
+        \midrule
+        TC01 & 正确用户名密码 & 登录成功 & 通过 \\
+        TC02 & 错误密码 & 提示错误 & 通过 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{性能测试}
+使用JMeter进行压力测试，系统满足性能指标。
+
+\subsection{测试结论}
+系统功能完整，性能稳定，通过测试。

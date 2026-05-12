@@ -1,0 +1,52 @@
+% !TEX encoding = UTF-8
+% !TEX program = xelatex
+% main.tex - 主文件
+% 使用方法: xelatex main.tex 编译 PDF
+% pandoc main.tex -o output.docx --reference-doc=template.docx 转换 Word
+
+\documentclass[zihao=-4, UTF8]{ctexart} % 默认正文小4号宋体
+
+\input{preamble.tex} % 载入格式定义
+
+\begin{document}
+
+% 中文摘要（页码 I）
+\pagenumbering{Roman}
+\input{00.abstract.tex}
+
+% 英文摘要（页码 II）
+\input{01.abstract_en.tex}
+
+% 目录：自动生成，三级标题，页码从 1 开始（\newpage 保障 pandoc 转换时独占一页）
+\newpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+\phantomsection
+\addcontentsline{toc}{section}{\texorpdfstring{目 \qquad 录}{目 录}}
+\begin{center}
+    \heiti\zihao{-2}\bfseries 目 \qquad 录
+\end{center}
+\vspace{12pt}
+\makeatletter
+\@starttoc{toc}
+\makeatother
+
+\input{02.introduce.tex}        % 第1章 绪论/引言
+\input{03.sys_env.tex}          % 第2章 系统环境
+\input{04.require.tex}          % 第3章 需求分析
+\input{05.systematic_design.tex}% 第4章 系统设计
+\input{06.feature.tex}          % 第5章 功能实现 (根据模板实际内容调整)
+\input{07.unit_test.tex}        % 第6章 测试
+% 根据需要可添加其他章节
+\input{97.solution.tex}       % 解决方案
+
+% 致谢
+\input{98.thanks.tex}
+
+% 参考文献 (由99.bibl.tex管理 此文件自动生成)
+\input{99.bibl.tex}
+
+% 附录 (奇葩bug搞不定)
+% \input{appendix}
+
+\end{document}

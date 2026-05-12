@@ -1,0 +1,78 @@
+% 02.introduce.tex - 第1章 绪论/引言
+\section{绪论}
+
+\subsection{研究背景及意义}
+研究背景及意义内容……\par
+
+\subsection{PlantUML 用法说明}
+PlantUML 是一种开源绘图工具，支持通过纯文本脚本绘制多种 UML 图（如时序图、状态图、用例图等）。配合 \texttt{convert\_plantuml.py} 脚本，可自动将 \texttt{.puml} 文件编译为 SVG 图片。以下是一个有限状态机示例：
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{figures/puml/fsm.png}
+    \caption{PlantUML 状态机示例}
+    \label{fig:fsm_example}
+\end{figure}
+
+使用方式：在 \texttt{figures/puml/} 目录下编写 \texttt{.puml} 文件
+
+运行 \texttt{python convert\_plantuml.py} 即可自动编译。
+
+编译生成的 SVG 图片通过 \texttt{\textbackslash includegraphics} 插入文档。
+
+\begin{table}[H]
+    \centering
+    \caption{一个可以换行的表格}
+    \label{tbl:wrapping_example}
+    \begin{tabular}{c c}
+        \toprule
+        第一列 & 第二列 \\
+        \midrule
+        这是一个很长的句子，需要手动在这里 \\ 换行，以便在Word里正常显示。 & 另一段文本。 \\
+        \bottomrule
+    \end{tabular}
+
+    \vspace{6pt}
+    {\zihao{5}\songti 注：表注位于表格下方，对表中的符号、标记或需要说明的事项进行补充。多条表注时按序号排列。}
+\end{table}
+
+\subsection{Mermaid 用法说明}
+Mermaid 是另一种纯文本绘图工具，支持流程图、状态图、时序图、甘特图等。配合 \texttt{convert\_mermaid.py} 脚本，可自动将 \texttt{.mmd} 文件编译为图片（Word 输出使用 PNG，SVG 中 foreignObject 文本 Word 无法识别）。以下是一个有限状态机示例：
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{figures/mermaid/fsm.png}
+    \caption{Mermaid 状态机示例}
+    \label{fig:mermaid_fsm}
+\end{figure}
+
+使用方式：在 \texttt{figures/mermaid/} 目录下编写 \texttt{.mmd} 文件
+
+运行 \texttt{python convert\_mermaid.py} 即可自动编译。
+
+首次使用前需执行 \texttt{cd bin/mermaid \&\& npm install} 安装依赖。
+
+\subsection{数据可视化: 热力图示例}
+sciplot 是本模板内置的科研数据可视化工具，基于 matplotlib，支持热力图、混淆矩阵、柱状图、折线图、散点图、雷达图等多种图表类型。配合 \texttt{convert\_sciplot.py} 脚本，可自动将 \texttt{figures/sciplot/} 下的 Python 绘图脚本编译为 SVG 矢量图。以下是一个特征相关性热力图示例：
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{figures/sciplot/heatmap_correlation.png}
+    \caption{特征相关性热力图示例}
+    \label{fig:heatmap_correlation}
+\end{figure}
+
+使用方式：在 \texttt{figures/sciplot/} 目录下编写 Python 绘图脚本，通过 \texttt{import sciplot as sp} 调用图表 API（如 \texttt{sp.heatmap()}、\texttt{sp.bar()}、\texttt{sp.line()} 等），最后调用 \texttt{sp.savefig()} 输出图片文件。运行 \texttt{python convert\_sciplot.py} 即可自动编译所有绘图脚本。SVG 矢量图在 Word 文档中可无损缩放，保证输出质量。
+
+\subsection{国内外研究现状}
+\subsubsection{国外研究现状}
+国外相关领域的发展情况……
+
+\subsubsection{国内研究现状}
+国内学者在此方面的工作……
+
+\subsection{本文主要工作及结构安排}
+本文后续章节安排如下：……
+
+% 以下为模板中原有的示例结构，为保持与 output.md 正文一致，可继续包含示例标题，但内容略写。
+% 实际使用中请替换为真实内容。

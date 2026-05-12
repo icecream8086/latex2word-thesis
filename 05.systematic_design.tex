@@ -1,0 +1,43 @@
+% 05.systematic_design.tex - 第4章 系统设计
+\section{系统设计}
+
+\subsection{总体架构设计}
+系统采用B/S架构，前端使用Vue.js，后端使用Spring Boot。系统总体架构如图\ref{fig:architecture}所示。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/architecture.jpg}
+    \caption{系统总体架构}
+    \label{fig:architecture}
+\end{figure}
+
+\subsection{数据库设计}
+\subsubsection{概念结构设计}
+系统E-R图如图\ref{fig:er}所示。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/er_diagram.jpg}
+    \caption{数据库E-R图}
+    \label{fig:er}
+\end{figure}
+
+\subsubsection{逻辑结构设计}
+主要数据表。
+
+\begin{table}[H]
+    \centering
+    \caption{测试表格}
+    \label{tbl:test_table}
+    \begin{tabular}{ccc}
+        \toprule
+        姓名 & 学号 & 成绩 \\
+        \midrule
+        张三 & 2024001 & 85 \\
+        李四 & 2024002 & 92 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{接口设计}
+RESTful API设计……

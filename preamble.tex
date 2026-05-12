@@ -1,0 +1,198 @@
+% !TEX encoding = UTF-8
+% !TEX program = xelatex
+% preamble.tex - LaTeX 模板导言区
+% 兼容 Pandoc 转换 Word 与 XeLaTeX 独立编译
+%
+% 本文件定义了符合学校《撰写格式及要求》的全部样式：
+% 页面设置、字体、行距、标题格式、图表标题、公式编号、摘要/致谢/参考文献环境等
+
+\usepackage{fontspec}                 % 字体设置
+\setmainfont{Times New Roman}         % 英文字体（学校要求）
+% ctexart 文档类已自动加载中文字体，\heiti \songti \fangsong 等命令均可用
+% 无需重复定义，避免冲突
+
+\usepackage{amsmath, amssymb}         % 数学公式支持
+\usepackage{graphicx}                 % 插图支持
+\usepackage[bookmarks=true, colorlinks=false, hidelinks]{hyperref} % 超链接（PDF书签）
+\usepackage{geometry}                 % 页面设置
+\geometry{
+    a4paper,
+    top=2.2cm, bottom=2.2cm,
+    left=2.5cm, right=2.5cm,
+    headheight=1.2cm, footskip=1.5cm   % 页眉页脚高度，符合学校要求
+}
+\usepackage{fancyhdr}                 % 页眉页脚
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[C]{\zihao{-5}\heiti XeTeX正文内容模板---pdf产物仅供预览---需通过模板转换} % 页眉居中，小5号黑体
+\fancyfoot[C]{\thepage}               % 页码居中
+\renewcommand{\headrulewidth}{0pt}    % 去掉页眉横线
+
+\usepackage{setspace}                 % 行距控制
+\onehalfspacing                        % 全文 1.5 倍行距（学校规范）
+\usepackage{makecell}                 % 支持单元格内手动换行，仅保障pdf输出，需要人工设置ref.docx
+\usepackage{titlesec}                 % 标题格式自定义
+\usepackage{titletoc}                 % 目录格式控制
+\usepackage{caption}                  % 图表标题格式
+\usepackage{booktabs}                 % 三线表支持
+\usepackage{array}                    % 表格列格式增强
+\usepackage{float}                    % 浮动体 [H] 参数
+\usepackage{enumitem}                 % 列表环境控制
+\usepackage[perpage]{footmisc}        % 脚注每页重置
+
+% --- 表格增强设置 ---
+% 调整表格行高，使内容更舒展
+\renewcommand{\arraystretch}{1.3}
+% --------------------
+
+% ---------- 图片格式 ----------
+% XeLaTeX 编译用 png（\includegraphics 不支持 svg），
+% Pandoc 转 Word 时可改为 svg（Word 原生支持 svg 嵌入）
+\newcommand{\imageformat}{png}
+
+% ---------- 段落缩进 ----------
+\setlength{\parindent}{2em}           % 每段首行缩进2字符（学校规范）
+
+% ---------- 目录 ----------
+\setcounter{tocdepth}{3}              % 目录显示到三级标题
+
+% 目录条目格式：宋体小4号（中文），Times New Roman 小4号（数字/英文），不倾斜
+\titlecontents{section}
+    [0em]
+    {\songti\zihao{-4}}
+    {\thecontentslabel\ }
+    {}
+    {\dotfill\ \thecontentspage}
+    []
+\titlecontents{subsection}
+    [2em]
+    {\songti\zihao{-4}}
+    {\thecontentslabel\ }
+    {}
+    {\dotfill\ \thecontentspage}
+    []
+\titlecontents{subsubsection}
+    [4em]
+    {\songti\zihao{-4}}
+    {\thecontentslabel\ }
+    {}
+    {\dotfill\ \thecontentspage}
+    []
+
+% ---------- 标题格式（严格遵循学校规范） ----------
+% 一级标题：小2号黑体，加粗，居中，新页开始，序号后空1字符
+\titleformat{\section}
+    {\newpage\centering\heiti\zihao{-2}\bfseries}
+    {\thesection}{1em}{}
+\titlespacing*{\section}{0pt}{0pt}{0pt}
+
+% 二级标题：小3号黑体，靠左顶格
+\titleformat{\subsection}
+    {\heiti\zihao{-3}\bfseries}
+    {\thesubsection}{1em}{}
+\titlespacing*{\subsection}{0pt}{0pt}{0pt}
+
+% 三级标题：4号黑体，靠左顶格
+\titleformat{\subsubsection}
+    {\heiti\zihao{4}\bfseries}
+    {\thesubsubsection}{1em}{}
+\titlespacing*{\subsubsection}{0pt}{0pt}{0pt}
+
+% 四级及以下标题（如需要）可用 \paragraph 等，学校未严格要求，此处省略
+
+% ---------- 图表标题格式（学校规范） ----------
+% 要求：5号宋体加粗，图序与图题之间空1字符，段前段后1行（约12pt）
+\captionsetup{
+    font={bf,small},          % small ≈ 5号(10.5pt)，bf 加粗
+    labelfont={bf,small},
+    textfont={bf,small},
+    labelsep=space,           % 序号与标题间空一个字符
+    skip=12pt,                % 与上下文间距（段前段后1行）
+    position=bottom           % 图标题在下，表标题在上（由环境自动处理）
+}
+
+% ---------- 图表与公式编号：按章排序（如“图1-1”、“表2-3”、“(3-2)”） ----------
+\usepackage{chngcntr}
+\counterwithin{figure}{section}
+\counterwithin{table}{section}
+\counterwithin{equation}{section}
+\renewcommand{\thefigure}{\thesection--\arabic{figure}}
+\renewcommand{\thetable}{\thesection--\arabic{table}}
+\renewcommand{\theequation}{\thesection--\arabic{equation}}
+
+% ---------- 目录标题中文化 ----------
+\renewcommand{\contentsname}{目 \qquad 录}
+
+% ---------- 中文摘要环境 ----------
+\newenvironment{cnabstract}
+    {\newpage
+     \phantomsection
+     \addcontentsline{toc}{section}{\texorpdfstring{摘 \quad 要}{摘 要}}
+     \begin{center}
+        \heiti\zihao{-2}\bfseries 摘 \quad 要
+     \end{center}
+     \vspace{12pt}
+     \zihao{-4}\songti
+    }{\par\vspace{12pt}}
+
+% ---------- 英文摘要环境 ----------
+\newenvironment{enabstract}
+    {\newpage
+     \phantomsection
+     \addcontentsline{toc}{section}{Abstract}  % 纯英文无需 \texorpdfstring
+     \begin{center}
+        \bfseries\zihao{-2} Abstract
+     \end{center}
+     \vspace{12pt}
+     \zihao{-4}\rmfamily
+    }{\par\vspace{12pt}}
+
+% ---------- 关键词命令 ----------
+\newcommand{\cnkeywords}[1]{%
+    \par\noindent{\heiti\zihao{-4}\bfseries 关键词：}\songti\zihao{-4} #1
+}
+\newcommand{\enkeywords}[1]{%
+    \par\noindent{\bfseries\zihao{-4} Key words:} \zihao{-4} #1
+}
+
+% ---------- 致谢环境 ----------
+\newenvironment{thesisthanks}
+    {\newpage
+     \phantomsection
+     \addcontentsline{toc}{section}{\texorpdfstring{致 \quad 谢}{致 谢}}
+     \begin{center}
+        \heiti\zihao{-2}\bfseries 致 \quad 谢
+     \end{center}
+     \vspace{12pt}
+     \zihao{-4}\songti
+    }{\par}
+
+% ---------- 参考文献环境 ----------
+% 使用手动的 thebibliography，字体为仿宋小四
+\newenvironment{thesisbibl}
+    {\newpage
+     \phantomsection
+     \addcontentsline{toc}{section}{参考文献}
+     \begin{center}
+        \heiti\zihao{-2}\bfseries 参考文献
+     \end{center}
+     \vspace{12pt}
+     \zihao{-4}\fangsong
+     \setlength{\parindent}{0pt}      % 参考文献条目悬挂缩进（需在 bib 条目中自行控制）
+     \begin{thebibliography}{ }} %换行确保格式一致性
+    {\end{thebibliography}\par}
+
+% ---------- 附录环境 ----------
+\newenvironment{thesisappendix}
+    {\newpage
+     \phantomsection
+     \addcontentsline{toc}{section}{附 \quad 录}
+     \begin{center}
+        \heiti\zihao{-2}\bfseries 附 \quad 录
+     \end{center}
+     \vspace{12pt}
+     \zihao{-4}\songti
+    }{\par}
+
+% ---------- 防止浮动体跨章节 ----------
+\usepackage[section]{placeins}

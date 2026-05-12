@@ -1,0 +1,30 @@
+@startuml
+' 使用skinparam设置样式
+skinparam DefaultFontName "Microsoft YaHei"
+skinparam ConditionFontStyle italic
+
+' 定义状态机
+state "初始状态" as S1
+state "运行状态" as S2
+state "暂停状态" as S3
+state "停止状态" as S4
+
+' 定义初始状态（使用伪状态）
+[*] --> S1 : 系统启动
+
+' 状态转换
+S1 --> S2 : 开始运行
+S2 --> S3 : 暂停
+S3 --> S2 : 继续运行
+S2 --> S4 : 停止
+S3 --> S4 : 停止
+S4 --> S1 : 重置系统
+
+' 定义终止状态（可选）
+S4 --> [*] : 关闭系统
+
+' 注释和说明
+note right of S2 : 执行主要功能\n在此状态下系统正常工作
+note left of S3 : 临时暂停\n保存当前进度
+
+@enduml
