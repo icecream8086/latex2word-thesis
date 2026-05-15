@@ -33,6 +33,13 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "警告: sciplot 编译失败，请检查 Python 脚本语法" -ForegroundColor Yellow
 }
 
+# 编译 figures/chen_er 目录下所有 Chen 式 E-R 图
+Write-Host "正在编译 Chen 式 E-R 图..." -ForegroundColor Green
+python .\convert_chen_er.py --format svg
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "警告: Chen E-R 图编译失败，请检查 chen_er 脚本语法" -ForegroundColor Yellow
+}
+
 # 从 bib 文件自动生成 99.bibl.tex
 python .\gen_bibl.py
 
