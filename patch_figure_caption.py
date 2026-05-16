@@ -84,6 +84,8 @@ def fix_figure_caption_bold(input_path, output_path):
             if paragraph.runs:
                 # 获取该段落的所有文本
                 full_text = paragraph.text
+                # 移除编号后的冒号，如 "图4.1: " → "图4.1 "
+                full_text = re.sub(r'^(图[\d.]+)[：:]\s*', r'\1 ', full_text)
                 # 清除原有内容
                 paragraph.clear()
                 # 重新添加整个文本，并设置为加粗

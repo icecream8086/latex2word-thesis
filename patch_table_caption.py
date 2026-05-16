@@ -160,6 +160,31 @@ def auto_fit_tables(doc):
     return modified
 
 
+def remove_caption_colon(doc):
+    """
+    移除表格标题编号后的冒号，如 "表4.1: " → "表4.1 "
+
+    表格标题的结构（pandoc 输出）:
+      <w:hyperlink w:anchor="tbl:xxx">
+        <w:r><w:t>表4.1</w:t></w:r>
+      </w:hyperlink>
+      <w:r><w:t>: </w:t></w:r>    ← 冒号单独一个 run
+      <w:r><w:t>标题文字</w:t></w:r>
+    """
+    modified = 0
+    for para in doc.paragraphs:
+        if para.style.name != "Table Caption":
+            continue
+        # 找到内容仅为冒号（含空格）的 run，清空它
+        for run in para.runs:
+            if run.text and re.fullmatch(r'\s*[：:]\s*', run.text):
+                run.text = ""
+                modified += 1
+    if modified:
+        print(f"  [冒号] 已移除 {modified} 个表格标题冒号")
+    return modified
+
+
 def process_document(input_path, output_path):
     """按控制变量设置，按合理顺序执行所有启用的操作"""
     print(f"处理文档: {input_path}")
@@ -169,7 +194,10 @@ def process_document(input_path, output_path):
     if RESOLVE_HYPERLINKS:
         resolve_hyperlink_fields(doc)
 
-    # 2. 再处理加粗（非破坏性，保留超链接等结构）
+    # 2. 移除表格标题冒号
+    remove_caption_colon(doc)
+
+    # 3. 再处理加粗（非破坏性，保留超链接等结构）
     if BOLD_CAPTION:
         fix_caption_bold(doc)
 
