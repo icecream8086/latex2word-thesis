@@ -466,27 +466,76 @@ class Diagram:
 
     # ── Attribute placement ─────────────────────────────────────────
 
+    def _attr_half_width(self, attr: Attr) -> float:
+        """实际渲染的椭圆半宽（与 _attr_shape 保持一致）。"""
+        rx = max(self.style.attr_rx, _tw(attr.name, self.style.font_size_attr) / 2 + 10)
+        if attr.key:
+            rx = max(rx, _tw(attr.name, self.style.font_size_attr) / 2 + 16)
+        return rx
+
     def _layout_attrs(self, ent: Entity):
-        """Place attributes around entity using angular fan."""
+        """围绕实体自适应放置属性，自动扩大半径避免椭圆重叠。"""
         attrs = ent.attrs
         n = len(attrs)
         if n == 0:
             return
+
+        gap = 8  # 椭圆间最小间距
+        angles = [i * (2 * math.pi / n) - math.pi / 2 for i in range(n)]
+        half_widths = [self._attr_half_width(a) for a in attrs]
+
+        # 计算最小半径：检查所有相邻属性对（含首尾环绕）
+        r = self.style.attr_dist
+        if n >= 2:
+            for i in range(n):
+                j = (i + 1) % n
+                da = angles[j] - angles[i]
+                if da <= 0:
+                    da += 2 * math.pi
+                if da < 0.001:
+                    continue
+                needed = (half_widths[i] + half_widths[j] + gap) / (2 * math.sin(da / 2))
+                r = max(r, needed)
+        else:
+            # 单个属性：半宽即可
+            r = max(r, half_widths[0] + gap)
+
         for i, attr in enumerate(attrs):
-            a = i * (2 * math.pi / n) - math.pi / 2
-            attr.angle = a
-            attr.x = ent.x + self.style.attr_dist * math.cos(a)
-            attr.y = ent.y + self.style.attr_dist * math.sin(a)
+            attr.angle = angles[i]
+            attr.x = ent.x + r * math.cos(angles[i])
+            attr.y = ent.y + r * math.sin(angles[i])
 
     def _layout_rel_attrs(self, rel: Relationship):
-        """Place relationship attributes above the diamond (φ-spaced)."""
-        n = len(rel.attrs)
+        """关系属性扇形放置在菱形上方，自适应半径避免重叠。"""
+        attrs = rel.attrs
+        n = len(attrs)
         if n == 0:
             return
-        for i, attr in enumerate(rel.attrs):
-            angle = -math.pi / 2 + (i - (n - 1) / 2) * math.pi / (max(n, 2) * 1.5)
-            attr.x = rel.x + self.style.attr_dist * math.cos(angle)
-            attr.y = rel.y + self.style.attr_dist * math.sin(angle)
+
+        gap = 8
+        # 扇形角度范围：±60°（120° 总跨度），关系属性通常较少
+        span = math.pi * 2 / 3
+        if n == 1:
+            angles = [-math.pi / 2]
+        else:
+            angles = [-math.pi / 2 - span / 2 + i * span / (n - 1) for i in range(n)]
+
+        half_widths = [self._attr_half_width(a) for a in attrs]
+
+        r = self.style.attr_dist
+        if n >= 2:
+            for i in range(n - 1):
+                da = angles[i + 1] - angles[i]
+                if da < 0.001:
+                    continue
+                needed = (half_widths[i] + half_widths[i + 1] + gap) / (2 * math.sin(da / 2))
+                r = max(r, needed)
+        else:
+            r = max(r, half_widths[0] + gap)
+
+        for i, attr in enumerate(attrs):
+            attr.x = rel.x + r * math.cos(angles[i])
+            attr.y = rel.y + r * math.sin(angles[i])
 
     def _calc_bounds(self):
         """Compute (min_x, min_y, max_x, max_y) covering all elements."""
