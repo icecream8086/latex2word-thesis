@@ -17,7 +17,7 @@ import re
 
 # ==================== 控制变量 ====================
 FORMAT_BIBLIOGRAPHY = True
-URL_HYPERLINK = True
+URL_HYPERLINK = False
 # =================================================
 
 URL_PATTERN = re.compile(r'(https?://[^\s。，、；：\)）\]]+)')
