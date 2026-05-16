@@ -1,3 +1,5 @@
+# git clean -fdx
+
 *.pdf
 *.log
 *.aux
@@ -12,7 +14,6 @@ todo.txt
 log.md
 patch_header.py.back
 99.bibl.tex
-
 *.png
 !LOGO.png
 
