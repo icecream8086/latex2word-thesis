@@ -26,15 +26,44 @@ SCRIPT_DIRS = ["figures/chen_er"]
 DEFAULT_OUTPUT_DIR = "figures/chen_er"
 
 
+def _read_ignore_list(project_root: Path):
+    """读取 ignore.yaml 忽略列表，返回要跳过的文件名集合。
+
+    文件不存在时创建模板（含注释），然后返回 None 表示编译全部。
+    """
+    path = project_root / "figures" / "chen_er" / "ignore.yaml"
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "# Chen ER 图编译忽略列表 — 在此列出的 .py 完全不会编译\n"
+            "# 用于已手动转成 drawio 编辑的脚本，防止覆盖\n"
+            "# 格式:\n"
+            "# - xxx.py\n",
+            encoding="utf-8",
+        )
+        return None
+    names = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line.startswith("- ") and line.endswith(".py"):
+            names.add(line[2:].strip())
+    return names
+
+
 def find_er_scripts(project_root: Path) -> list[Path]:
-    """在配置的目录中递归查找所有 .py ER 图脚本（排除 __init__.py）。"""
+    """在配置的目录中递归查找 .py ER 图脚本（排除 __init__.py 和 ignore.yaml 中列出的）。"""
+    ignore_list = _read_ignore_list(project_root)
     files = []
     for d in SCRIPT_DIRS:
         target = project_root / d
         if target.is_dir():
             for f in sorted(target.rglob("*.py")):
-                if f.name != "__init__.py":
-                    files.append(f)
+                if f.name == "__init__.py":
+                    continue
+                if ignore_list is not None and f.name in ignore_list:
+                    print(f"  [跳过] {f.name} (在 ignore.yaml 中)")
+                    continue
+                files.append(f)
     return files
 
 

@@ -30,3 +30,5 @@ xml
 main.synctex(busy)
 
 ~tmp_docx_xml
+
+*.drawio

@@ -1,0 +1,7 @@
+# Chen ER 图编译忽略列表 — 在此列出的 .py 完全不会编译
+# 用于已手动转成 drawio 编辑的脚本，防止 out.ps1 覆盖导出文件
+# 手动在gitignore 添加 !xxx.drawio保存
+# 格式 :
+# - xxx.py
+
+- system_er_conceptual.py

@@ -70,3 +70,7 @@ out_name = os.environ.get("CHEN_ER_OUTPUT", "system_er")
 out_path = os.path.join(_script_dir, f"{out_name}.svg")
 dia.render(out_path)
 print(f"  SVG 已生成: {out_path}")
+
+# 导出 draw.io 格式
+drawio_path = os.path.join(_script_dir, f"{out_name}.drawio")
+dia.render_drawio(drawio_path)

@@ -33,7 +33,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "警告: sciplot 编译失败，请检查 Python 脚本语法" -ForegroundColor Yellow
 }
 
-# 编译 figures/chen_er 目录下所有 Chen 式 E-R 图
+# 编译 figures/chen_er 目录下所有 Chen 式 E-R 图（ignore.yaml 中列出的除外）
 Write-Host "正在编译 Chen 式 E-R 图..." -ForegroundColor Green
 python .\convert_chen_er.py --format svg
 if ($LASTEXITCODE -ne 0) {

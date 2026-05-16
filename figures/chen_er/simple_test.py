@@ -24,3 +24,7 @@ rel.set_card(student, "N"); rel.set_card(course, "M")
 out_path = os.path.join(_script_dir, "simple_test.svg")
 dia.render(out_path)
 print(f"  SVG 已生成: {out_path}")
+
+# 导出 draw.io 格式
+drawio_path = os.path.join(_script_dir, "simple_test.drawio")
+dia.render_drawio(drawio_path)

@@ -76,6 +76,13 @@ class Style:
 # Default instance — other scripts can ``from chen_er import DEFAULT_STYLE``
 DEFAULT_STYLE = Style()
 
+# 概念图预设样式（紧凑，无属性，适合系统级 ER 图）
+CONCEPTUAL_STYLE = Style(
+    entity_w=100, entity_h=44, rel_size=40,
+    font_size_entity=14, font_size_rel=13, font_size_card=10,
+    group_gap=120, padding=40,
+)
+
 
 # ── Helper: estimate text pixel width ──────────────────────────────────
 
@@ -512,6 +519,251 @@ class Diagram:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(svg)
+
+    # ── draw.io export ────────────────────────────────────────────
+
+    def _dot_layout(self):
+        """Use Graphviz dot for hierarchical layout (entities + relationship nodes)."""
+        import subprocess, tempfile, re
+
+        lines = ['digraph ER {', 'rankdir=LR;',
+                 'node [shape=box,style=rounded,width=1.2,height=0.5,fixedsize=true];',
+                 'edge [arrowhead=none];']
+        ent_ids, rel_ids = {}, {}
+        for i, e in enumerate(self.entities):
+            vid = f"e{i}"
+            ent_ids[id(e)] = vid
+            lines.append(f'{vid} [label="{_escape(e.name)}"];')
+        for i, r in enumerate(self.relationships):
+            vid = f"r{i}"
+            rel_ids[id(r)] = vid
+            lines.append(f'{vid} [label="{_escape(r.name)}",shape=diamond,width=0.8,height=0.8];')
+        done = set()
+        for cn in self.connections:
+            rid = rel_ids.get(id(cn.rel))
+            eid = ent_ids.get(id(cn.ent))
+            if not rid or not eid:
+                continue
+            chain = (rid, id(cn.rel), id(cn.ent))
+            if chain in done:
+                continue
+            done.add(chain)
+            rel_ents = [c.ent for c in self.connections if c.rel is cn.rel]
+            if len(rel_ents) >= 2 and not cn.rel.is_reflexive:
+                e0 = ent_ids.get(id(rel_ents[0]))
+                e1 = ent_ids.get(id(rel_ents[1]))
+                if e0 and e1:
+                    lines.append(f'{e0} -> {rid};')
+                    lines.append(f'{rid} -> {e1};')
+            else:
+                lines.append(f'{eid} -> {rid};')
+        lines.append('}')
+
+        try:
+            r = subprocess.run(
+                ["dot", "-Tplain"],
+                input="\n".join(lines),
+                capture_output=True, text=True, timeout=15,
+            )
+            if r.returncode != 0:
+                return False
+
+            node_pos = {}
+            for line in r.stdout.splitlines():
+                parts = line.split()
+                if len(parts) >= 5 and parts[0] == "node":
+                    name, x, y, w, h = parts[1], float(parts[2]), float(parts[3]), float(parts[4]), float(parts[5])
+                    node_pos[name] = (x * 72, y * 72, w * 72, h * 72)
+
+            max_y = 0
+            for e in self.entities:
+                nid = ent_ids.get(id(e))
+                if nid and nid in node_pos:
+                    nx, ny, nw, nh = node_pos[nid]
+                    e.x = nx
+                    e.y = ny
+                    e.w = max(e.w, nw)
+                    e.h = max(e.h, nh)
+                    max_y = max(max_y, ny)
+            for e in self.entities:
+                nid = ent_ids.get(id(e))
+                if nid and nid in node_pos:
+                    e.y = max_y - e.y + 60
+                    e.x += 80
+
+            # Place rel diamonds at dot positions (same flip/offset as entities)
+            for rel in self.relationships:
+                nid = rel_ids.get(id(rel))
+                if nid and nid in node_pos:
+                    nx, ny, nw, nh = node_pos[nid]
+                    rel.x = nx + 80
+                    rel.y = (max_y - ny) + 60
+                else:
+                    # Fallback: midpoint between connected entities
+                    xs, ys = [], []
+                    for cn in self.connections:
+                        if cn.rel is rel:
+                            xs.append(cn.ent.x)
+                            ys.append(cn.ent.y)
+                    if xs:
+                        rel.x = sum(xs) / len(xs)
+                        rel.y = sum(ys) / len(ys) - 20
+
+            return True
+        except Exception:
+            return False
+
+    def render_drawio(self, path: str, do_layout=True):
+        """Export diagram as draw.io XML (.drawio).
+
+        Args:
+            path: 输出路径.
+            do_layout: True=内部自动布局, "dot"=Graphviz最优布局, False=用已有坐标.
+        """
+        if do_layout == "dot":
+            ok = self._dot_layout()
+            if not ok:
+                print("  [提示] dot 布局失败，回退到内部布局")
+                self.layout()
+        elif do_layout:
+            self.layout()
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+
+        _id = [0]
+        def nid(): _id[0] += 1; return f"n{_id[0]}"
+
+        cells = []
+        id_map = {}  # python-object → drawio-id
+
+        # ── vertices ───────────────────────────────────────────────
+        for ent in self.entities:
+            vid = nid()
+            id_map[id(ent)] = vid
+            x = ent.x - ent.w / 2
+            y = ent.y - ent.h / 2
+            style = "rounded=0;whiteSpace=wrap;html=1;"
+            style += "dashed=1;" if ent.weak else ""
+            cells.append(
+                f'<mxCell id="{vid}" value="{_escape(ent.name)}" '
+                f'style="{style}" vertex="1" parent="1">'
+                f'<mxGeometry x="{x:.0f}" y="{y:.0f}" '
+                f'width="{ent.w:.0f}" height="{ent.h:.0f}" as="geometry"/>'
+                f'</mxCell>')
+
+        for rel in self.relationships:
+            rid = nid()
+            id_map[id(rel)] = rid
+            s = rel.size * 2
+            x = rel.x - rel.size
+            y = rel.y - rel.size
+            style = "rhombus;whiteSpace=wrap;html=1;"
+            style += "dashed=1;" if rel.weak else ""
+            cells.append(
+                f'<mxCell id="{rid}" value="{_escape(rel.name)}" '
+                f'style="{style}" vertex="1" parent="1">'
+                f'<mxGeometry x="{x:.0f}" y="{y:.0f}" '
+                f'width="{s:.0f}" height="{s:.0f}" as="geometry"/>'
+                f'</mxCell>')
+
+        for ent in self.entities:
+            for attr in ent.attrs:
+                aid = nid()
+                id_map[id(attr)] = aid
+                tw = _tw(attr.name, self.style.font_size_attr)
+                rx = max(self.style.attr_rx, tw / 2 + 10)
+                ry = self.style.attr_ry
+                x = attr.x - rx
+                y = attr.y - ry
+                style = "ellipse;whiteSpace=wrap;html=1;"
+                style += "dashed=1;" if attr.derived else ""
+                # 多值用 double 边框 (strokeWidth)
+                if attr.multivalued:
+                    style += "strokeWidth=3;"
+                cells.append(
+                    f'<mxCell id="{aid}" value="{_escape(attr.name)}" '
+                    f'style="{style}" vertex="1" parent="1">'
+                    f'<mxGeometry x="{x:.0f}" y="{y:.0f}" '
+                    f'width="{rx*2:.0f}" height="{ry*2:.0f}" as="geometry"/>'
+                    f'</mxCell>')
+
+        # ── edges ──────────────────────────────────────────────────
+        for conn in self.connections:
+            src = id_map.get(id(conn.rel))
+            tgt = id_map.get(id(conn.ent))
+            if not src or not tgt:
+                continue
+            eid = nid()
+            style = "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;"
+            cells.append(
+                f'<mxCell id="{eid}" style="{style}" edge="1" '
+                f'parent="1" source="{src}" target="{tgt}">'
+                f'<mxGeometry relative="1" as="geometry"/>'
+                f'</mxCell>')
+
+            # cardinality label on edge
+            card = conn.rel.cardinalities.get(conn.ent, "")
+            if card:
+                ceid = nid()
+                cells.append(
+                    f'<mxCell id="{ceid}" value="{_escape(card)}" '
+                    f'style="edgeLabel;html=1;align=center;'
+                    f'verticalAlign=middle;resizable=0;points=[];" '
+                    f'vertex="1" connectable="0" parent="{eid}">'
+                    f'<mxGeometry x="0.5" y="0.5" relative="1" '
+                    f'as="geometry"/>'
+                    f'</mxCell>')
+
+        # entity → attribute edges
+        for ent in self.entities:
+            for attr in ent.attrs:
+                src = id_map.get(id(ent))
+                tgt = id_map.get(id(attr))
+                if not src or not tgt:
+                    continue
+                eid = nid()
+                cells.append(
+                    f'<mxCell id="{eid}" style="rounded=0;html=1;" '
+                    f'edge="1" parent="1" source="{src}" target="{tgt}">'
+                    f'<mxGeometry relative="1" as="geometry"/>'
+                    f'</mxCell>')
+
+        # rel → attribute edges
+        for rel in self.relationships:
+            for attr in rel.attrs:
+                src = id_map.get(id(rel))
+                tgt = id_map.get(id(attr))
+                if not src or not tgt:
+                    continue
+                eid = nid()
+                cells.append(
+                    f'<mxCell id="{eid}" style="rounded=0;html=1;" '
+                    f'edge="1" parent="1" source="{src}" target="{tgt}">'
+                    f'<mxGeometry relative="1" as="geometry"/>'
+                    f'</mxCell>')
+
+        # ── assemble ───────────────────────────────────────────────
+        w = max(self._svg_w, 800)
+        h = max(self._svg_h, 600)
+        lines = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<mxfile host="chen_er.py">',
+            '<diagram name="Page-1">',
+            f'<mxGraphModel dx="0" dy="0" grid="1" gridSize="10" '
+            f'guides="1" tooltips="1" connect="1" arrows="1" '
+            f'fold="1" page="1" pageScale="1" '
+            f'pageWidth="{w}" pageHeight="{h}" math="0" shadow="0">',
+            '<root>',
+            '<mxCell id="0"/>',
+            '<mxCell id="1" parent="0"/>',
+            *cells,
+            '</root>',
+            '</mxGraphModel>',
+            '</diagram>',
+            '</mxfile>',
+        ]
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        print(f"  draw.io: {path}")
 
     def _generate_svg(self) -> str:
         lines = [
