@@ -33,17 +33,50 @@ DEFAULT_OUTPUT_FORMAT = "svg"
 JAVA_CMD = "java"
 # Java 编码参数（UTF-8）
 JAVA_ENCODING_OPTS = ["-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8"]
+# Drawio 忽略列表路径（相对于项目根目录）
+IGNORE_PATH = "figures/puml/ignore.yaml"
 
 
 # --- 核心转换逻辑 -----------------------------------------------------------
 
-def find_puml_files(project_root: Path) -> list[Path]:
-    """在配置的目录中递归查找所有 .puml 文件。"""
+def _read_ignore_list(project_root: Path, ignore_path: str = IGNORE_PATH):
+    """读取 ignore.yaml 忽略列表，返回要跳过的文件名集合。
+
+    文件不存在时创建模板（含注释），然后返回 None 表示全部编译。
+    被忽略的文件完全不会被编译（不生成任何文件）。
+    """
+    path = project_root / ignore_path
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "# PlantUML 编译忽略列表\n"
+            "# 在此列出的 .puml 完全不会被编译\n"
+            "# 用于已手动转成 drawio 编辑的文件，防止覆盖\n"
+            "# 格式:\n"
+            "# - xxx.puml\n",
+            encoding="utf-8",
+        )
+        return None
+    names = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line.startswith("- ") and line.endswith(".puml"):
+            names.add(line[2:].strip())
+    return names
+
+
+def find_puml_files(project_root: Path,
+                    ignore_set: set | None = None) -> list[Path]:
+    """在配置的目录中递归查找所有 .puml 文件（排除 ignore_set 中的）。"""
     files = []
     for d in PUML_DIRS:
         target = (project_root / d)
         if target.is_dir():
-            files.extend(sorted(target.rglob("*.puml")))
+            for f in sorted(target.rglob("*.puml")):
+                if ignore_set is not None and f.name in ignore_set:
+                    print(f"  [跳过] {f.name} (在 ignore.yaml 中)")
+                    continue
+                files.append(f)
     return files
 
 
@@ -116,6 +149,47 @@ def _convert_svg_to_pdf(svg_path: Path, pdf_path: Path) -> bool:
     print(f"          pip install cairosvg", file=sys.stderr)
     print(f"         或 pip install svglib reportlab", file=sys.stderr)
     return False
+
+
+def _generate_empty_drawio(drawio_path: Path) -> bool:
+    """生成空白 drawio 占位文件，方便在 draw.io 中手动编辑。"""
+    drawio_xml = '''<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="plantuml2drawio">
+<diagram id="page-1" name="Page-1">
+<mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="935" pageHeight="726" math="0" shadow="0">
+<root>
+<mxCell id="0"/>
+<mxCell id="1" parent="0"/>
+</root>
+</mxGraphModel>
+</diagram>
+</mxfile>'''
+
+    drawio_path.write_text(drawio_xml, encoding="utf-8")
+    print(f"  [Drawio] {drawio_path.name}")
+    return True
+
+
+def export_drawio(puml_files: list[Path],
+                  ignore_set: set | None = None) -> tuple[int, int]:
+    """为一批 puml 文件生成空白 .drawio 占位文件，返回 (成功数, 总数)。"""
+    success = 0
+    total = len(puml_files)
+
+    for f in puml_files:
+        if ignore_set is not None and f.name in ignore_set:
+            print(f"  [跳过 drawio] {f.name} (在 ignore.yaml 中)")
+            success += 1
+            continue
+
+        drawio_path = f.with_suffix(".drawio")
+        ok = _generate_empty_drawio(drawio_path)
+        if ok:
+            success += 1
+        if not ok and total == 1:
+            return 0, 1
+
+    return success, total
 
 
 def convert_single(jar: Path, puml_file: Path, check_metadata: bool = True,
@@ -195,14 +269,16 @@ def convert_all(jar: Path, puml_files: list[Path],
 def watch_mode(jar: Path, project_root: Path, interval: float = 2.0,
                check_metadata: bool = True, charset: str = "UTF-8",
                output_format: str = "svg",
-               with_pdf: bool = False):
+               with_pdf: bool = False,
+               drawio: bool = False,
+               ignore_set: set | None = None):
     """
     监听模式：轮询 puml 文件变更，有变动时自动编译。
     无需安装 watchdog，纯依赖文件 mtime 轮询。
     """
     # 构建 {路径: mtime} 映射
     def get_snapshot() -> dict[Path, float]:
-        return {f: f.stat().st_mtime for f in find_puml_files(project_root)
+        return {f: f.stat().st_mtime for f in find_puml_files(project_root, ignore_set)
                 if f.exists()}
 
     snapshot = get_snapshot()
@@ -233,6 +309,8 @@ def watch_mode(jar: Path, project_root: Path, interval: float = 2.0,
                     ok = convert_single(jar, f, check_metadata, charset, output_format, with_pdf)
                     status = "成功" if ok else "失败"
                     print(f"  [{status}] {f}")
+                    if ok and drawio:
+                        export_drawio([f], ignore_set)
 
             if deleted:
                 print(f"\n以下 {len(deleted)} 个文件已删除:")
@@ -310,6 +388,8 @@ def main():
                         help="跳过 PDF 输出")
     parser.add_argument("--check-encoding", action="store_true",
                         help="检查所有 puml 文件的编码并给出警告")
+    parser.add_argument("--drawio", action="store_true",
+                        help="额外生成 drawio 文件（基于已编译的 SVG，受 ignore.yaml 控制）")
 
     args = parser.parse_args()
 
@@ -330,6 +410,9 @@ def main():
     check_metadata = not args.no_check
     charset = args.charset.upper()
 
+    # 统一读取忽略列表（被忽略的文件完全不参与编译）
+    ignore_set = _read_ignore_list(project_root)
+
     # 单文件模式
     if args.file:
         puml_file = Path(args.file)
@@ -338,6 +421,8 @@ def main():
             sys.exit(1)
         print(f"正在编译: {puml_file} -> {args.format} (编码: {charset})")
         success = convert_single(jar, puml_file, check_metadata, charset, args.format, not args.no_pdf)
+        if success and args.drawio:
+            export_drawio([puml_file], ignore_set)
         if success:
             print("完成。")
         else:
@@ -346,7 +431,7 @@ def main():
 
     # 编码检查模式
     if args.check_encoding:
-        puml_files = find_puml_files(project_root)
+        puml_files = find_puml_files(project_root, ignore_set)
         if not puml_files:
             print("未找到任何 .puml 文件。")
             return
@@ -355,11 +440,11 @@ def main():
 
     # 监听模式
     if args.watch:
-        watch_mode(jar, project_root, args.interval, check_metadata, charset, args.format, not args.no_pdf)
+        watch_mode(jar, project_root, args.interval, check_metadata, charset, args.format, not args.no_pdf, drawio=args.drawio, ignore_set=ignore_set)
         return
 
     # 默认：编译所有
-    puml_files = find_puml_files(project_root)
+    puml_files = find_puml_files(project_root, ignore_set)
     if not puml_files:
         print("未找到任何 .puml 文件。")
         return
@@ -372,6 +457,13 @@ def main():
     check_and_warn_encoding(puml_files)
 
     success, total = convert_all(jar, puml_files, check_metadata, charset, args.format, not args.no_pdf)
+
+    # Drawio 导出
+    if args.drawio and success > 0:
+        print(f"\n正在导出 drawio 文件...")
+        drawio_ok, drawio_total = export_drawio(puml_files, ignore_set)
+        print(f"Drawio: {drawio_ok}/{drawio_total} 个文件导出成功。")
+
     print(f"完成: {success}/{total} 个文件编译成功。")
 
     if success < total:

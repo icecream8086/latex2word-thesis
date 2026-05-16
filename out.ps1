@@ -11,9 +11,9 @@ if (Test-Path $tempFile) {
     exit 1
 }
 
-# 编译 figures 目录下所有 puml 文件为 svg
+# 编译 figures 目录下所有 puml 文件为 svg，并额外导出 drawio
 Write-Host "正在编译 PlantUML 图片...可能略慢" -ForegroundColor Green
-python .\convert_plantuml.py --format svg
+python .\convert_plantuml.py --format svg --drawio
 if ($LASTEXITCODE -ne 0) {
     Write-Host "警告: PlantUML 编译失败，请检查 Java 环境和 puml 文件语法" -ForegroundColor Yellow
 }
@@ -100,6 +100,9 @@ if ($stage2Success) {
     }
     if ($LASTEXITCODE -eq 0) {
         python '.\patch_caption_colon.py' $outputFile $outputFile
+    }
+    if ($LASTEXITCODE -eq 0) {
+        python '.\patch_crossref_font.py' $outputFile $outputFile
     }
     if ($LASTEXITCODE -eq 0) {
         python '.\patch_thanks.py' $outputFile $outputFile

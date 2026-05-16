@@ -1,0 +1,5 @@
+# PlantUML 编译忽略列表
+# 在此列出的 .puml 完全不会被编译（不生成 SVG/PNG/PDF/drawio）
+# 用于已手动转成 drawio 编辑的文件，防止覆盖
+# 格式:
+# - xxx.puml
