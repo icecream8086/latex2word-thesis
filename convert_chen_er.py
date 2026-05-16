@@ -233,6 +233,7 @@ def main():
             "  %(prog)s --watch                监听模式\n"
             "  %(prog)s --file foo.py          编译单个脚本\n"
             "  %(prog)s --format png           输出 PNG 格式\n"
+            "  %(prog)s --test-dot             测试 Graphviz dot 布局引擎\n"
         ),
     )
     parser.add_argument("--watch", "-w", action="store_true",
@@ -246,8 +247,26 @@ def main():
                         help="跳过 PNG 输出")
     parser.add_argument("--interval", "-i", type=float, default=2.0,
                         help="监听模式轮询间隔（秒，默认: 2.0）")
+    parser.add_argument("--test-dot", action="store_true",
+                        help="测试 Graphviz dot 布局引擎是否可用")
 
     args = parser.parse_args()
+
+    # --test-dot：快速检测 dot 是否可用
+    if args.test_dot:
+        import subprocess
+        try:
+            r = subprocess.run(["dot", "-V"], capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                ver = r.stderr.strip() or r.stdout.strip()
+                print(f"  Graphviz dot 可用: {ver}")
+            else:
+                print("  Graphviz dot 返回非零退出码", file=sys.stderr)
+                sys.exit(1)
+        except FileNotFoundError:
+            print("  错误: 未找到 Graphviz dot，请安装: https://graphviz.org/download/", file=sys.stderr)
+            sys.exit(1)
+        return
 
     if args.file:
         project_root = Path(args.file).resolve().parent.parent.parent
