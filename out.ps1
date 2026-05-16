@@ -56,11 +56,10 @@ pandoc main.tex -t json `
   -M equation-prefix="公式" `
   -M section-prefix="" `
   -M prefix-space="false" `
-  -M number-reset-level=3 `
-  -M figure-src-format="{prefix}{parent_num}" `
-  -M figure-ref-format="{parent_num}" `
-  -M table-src-format="{prefix}{parent_num}" `
-  -M table-ref-format="{parent_num}" `
+  -M figure-src-format="{prefix}{h1}-{fig_id}" `
+  -M figure-ref-format="{h1}-{fig_id}" `
+  -M table-src-format="{prefix}{h1}-{tab_id}" `
+  -M table-ref-format="{h1}-{tab_id}" `
   -M section-src-format-1="{h1} " `
   -M section-src-format-2="{h1}.{h2} " `
   -M section-src-format-3="{h1}.{h2}.{h3} " `

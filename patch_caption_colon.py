@@ -59,18 +59,32 @@ def remove_caption_colon(input_path, output_path):
             print("  [表题] 已补空格")
             xml = new_xml
 
-        # 2) 图题：在 ImageCaption 段落中，移除 "图X.Y:" 中的冒号
-        #    匹配 <w:t ...>图数字:  →  <w:t ...>图数字
+        # 2) 图题：在 ImageCaption 段落中，移除 "图X-X:" 中的冒号
+        #    优先处理编号与冒号在同一个 <w:t> 中的情况
         new_xml = re.sub(
             r'(<w:p\b[^>]*>\s*<w:pPr\b[^>]*>\s*<w:pStyle\s+w:val="ImageCaption"[^>]*/>.*?'
-            r'<w:t[^>]*>)图([\d.]+)[：:]\s*',
+            r'<w:t[^>]*>)图([\d.-]+)[：:]\s*',
             r'\1图\2 ',
             xml,
             flags=re.DOTALL
         )
         if new_xml != xml:
             modified = True
-            print("  [图题] 已移除冒号")
+            print("  [图题] 已移除冒号（同 run）")
+            xml = new_xml
+
+        # 2.5) 图题：处理冒号独立成 run 的情况（图号在超链接中时）
+        new_xml = re.sub(
+            r'(<w:p\b[^>]*>\s*<w:pPr\b[^>]*>\s*<w:pStyle\s+w:val="ImageCaption"[^>]*/>.*?'
+            r'<w:r\b[^>]*>\s*<w:rPr[^>]*>.*?</w:rPr>\s*<w:t[^>]*)'  # 到 <w:t 为止，不含 >
+            r'>\s*[：:]\s*</w:t>',
+            r'\1> </w:t>',
+            xml,
+            flags=re.DOTALL
+        )
+        if new_xml != xml:
+            modified = True
+            print("  [图题] 已移除冒号（独立 run）")
             xml = new_xml
 
         if not modified:
