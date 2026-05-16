@@ -47,7 +47,7 @@ python .\gen_bibl.py
 $jsonTemp = "temp_refs.json"
 pandoc main.tex -t json `
   --reference-doc=ref.docx `
-  --filter pandoc-tex-numbering `
+  --filter .\pandoc_tex_numbering_filter.cmd `
   --citeproc `
   --bibliography=bibl/fake_ref.bib `
   --csl=bibl/gb7714-2015-numeric.csl `
@@ -56,8 +56,11 @@ pandoc main.tex -t json `
   -M equation-prefix="公式" `
   -M section-prefix="" `
   -M prefix-space="false" `
-  -M fig-src-format="{prefix}{num} " `
-  -M tab-src-format="{prefix}{num} " `
+  -M number-reset-level=3 `
+  -M figure-src-format="{prefix}{parent_num}" `
+  -M figure-ref-format="{parent_num}" `
+  -M table-src-format="{prefix}{parent_num}" `
+  -M table-ref-format="{parent_num}" `
   -M section-src-format-1="{h1} " `
   -M section-src-format-2="{h1}.{h2} " `
   -M section-src-format-3="{h1}.{h2}.{h3} " `
@@ -95,6 +98,9 @@ if ($stage2Success) {
     python '.\patch_figure_caption.py' $outputFile $outputFile
     if ($LASTEXITCODE -eq 0) {
         python '.\patch_table_caption.py' $outputFile $outputFile
+    }
+    if ($LASTEXITCODE -eq 0) {
+        python '.\patch_caption_colon.py' $outputFile $outputFile
     }
     if ($LASTEXITCODE -eq 0) {
         python '.\patch_thanks.py' $outputFile $outputFile
