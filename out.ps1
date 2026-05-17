@@ -151,7 +151,16 @@ if ($stage2Success) {
         python '.\patch_bibliography.py' $outputFile $outputFile
     }
     if ($LASTEXITCODE -eq 0) {
+        python '.\patch_citation_hyperlink.py' $outputFile $outputFile
+    }
+    if ($LASTEXITCODE -eq 0) {
         python '.\patch_pagenum.py' $outputFile $outputFile
+    }
+    if ($LASTEXITCODE -eq 0) {
+        python '.\patch_chapter_break.py' $outputFile $outputFile
+    }
+    if ($LASTEXITCODE -eq 0) {
+        python '.\patch_strip_spaces.py' $outputFile $outputFile
     }
     if ($LASTEXITCODE -eq 0) {
         python '.\patch_toc.py' $outputFile $outputFile
