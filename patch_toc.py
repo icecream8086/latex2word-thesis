@@ -373,7 +373,17 @@ def add_toc(doc_path, output_path=None):
         for name in sorted(zip_content):
             z.writestr(name, zip_content[name])
 
-    os.replace(temp_out, out_path)
+    # 重试最多 3 次，避免文件被临时锁住
+    for attempt in range(3):
+        try:
+            os.replace(temp_out, out_path)
+            break
+        except PermissionError:
+            if attempt < 2:
+                import time; time.sleep(0.5)
+            else:
+                print(f"  [错误] 无法写入 {out_path}（文件可能被 Word 打开）", file=sys.stderr)
+                raise
     print(f"完成: {out_path}")
 
 

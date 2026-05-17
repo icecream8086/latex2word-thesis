@@ -1,3 +1,8 @@
+param(
+    [Alias('sb')]
+    [switch]$skipBinary = $false
+)
+
 # 基于 pandoc-tex-numbering 的过滤器
 # 微调空格
 
@@ -11,33 +16,37 @@ if (Test-Path $tempFile) {
     exit 1
 }
 
-# 编译 figures 目录下所有 puml 文件为 svg+png，并额外导出 drawio
-Write-Host "正在编译 PlantUML 图片...可能略慢" -ForegroundColor Green
-python .\convert_plantuml.py --format both --drawio
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "警告: PlantUML 编译失败，请检查 Java 环境和 puml 文件语法" -ForegroundColor Yellow
-}
+if (-not $skipBinary) {
+    # 编译 figures 目录下所有 puml 文件为 svg+png，并额外导出 drawio
+    Write-Host "正在编译 PlantUML 图片...可能略慢" -ForegroundColor Green
+    python .\convert_plantuml.py --format both --drawio
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "警告: PlantUML 编译失败，请检查 Java 环境和 puml 文件语法" -ForegroundColor Yellow
+    }
 
-# 编译 figures 目录下所有 mmd 文件为 png
-# 注：Mermaid SVG 使用 foreignObject 渲染文本，Word 无法识别，故使用 PNG
-Write-Host "正在编译 Mermaid 图片..." -ForegroundColor Green
-python .\convert_mermaid.py --format png
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "警告: Mermaid 编译失败，请检查 mmdc 安装和 mmd 文件语法" -ForegroundColor Yellow
-}
+    # 编译 figures 目录下所有 mmd 文件为 png
+    # 注：Mermaid SVG 使用 foreignObject 渲染文本，Word 无法识别，故使用 PNG
+    Write-Host "正在编译 Mermaid 图片..." -ForegroundColor Green
+    python .\convert_mermaid.py --format png
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "警告: Mermaid 编译失败，请检查 mmdc 安装和 mmd 文件语法" -ForegroundColor Yellow
+    }
 
-# 编译 figures/sciplot 目录下所有 Python 绘图脚本
-Write-Host "正在编译 sciplot 科研图表..." -ForegroundColor Green
-python .\convert_sciplot.py --format svg
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "警告: sciplot 编译失败，请检查 Python 脚本语法" -ForegroundColor Yellow
-}
+    # 编译 figures/sciplot 目录下所有 Python 绘图脚本
+    Write-Host "正在编译 sciplot 科研图表..." -ForegroundColor Green
+    python .\convert_sciplot.py --format svg
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "警告: sciplot 编译失败，请检查 Python 脚本语法" -ForegroundColor Yellow
+    }
 
-# 编译 figures/chen_er 目录下所有 Chen 式 E-R 图（ignore.yaml 中列出的除外）
-Write-Host "正在编译 Chen 式 E-R 图..." -ForegroundColor Green
-python .\convert_chen_er.py --format svg
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "警告: Chen E-R 图编译失败，请检查 chen_er 脚本语法" -ForegroundColor Yellow
+    # 编译 figures/chen_er 目录下所有 Chen 式 E-R 图（ignore.yaml 中列出的除外）
+    Write-Host "正在编译 Chen 式 E-R 图..." -ForegroundColor Green
+    python .\convert_chen_er.py --format svg
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "警告: Chen E-R 图编译失败，请检查 chen_er 脚本语法" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "跳过二进制资产编译（--skip-binary）" -ForegroundColor Cyan
 }
 
 # 从 bib 文件自动生成 99.bibl.tex
@@ -95,24 +104,33 @@ if ($stage1Success) {
 Remove-Item $jsonTemp -ErrorAction SilentlyContinue
 
 if ($stage2Success) {
-    # SVG 内嵌（独立步骤，失败不阻塞后续补丁链）
-    python '.\patch_embed_svg.py' $outputFile $outputFile
+    # 集中解压一次，供 lxml 补丁共享（避免每个补丁各自解压/打包）
+    $workDir = "temp_docx_dir"
+    Remove-Item $workDir -Recurse -ErrorAction SilentlyContinue
+    python -c "import zipfile; zipfile.ZipFile('$outputFile').extractall('$workDir')"
+
+    # ── lxml 补丁：操作目录，不独立解压/打包 ──
+    python '.\patch_embed_svg.py' $workDir $workDir
     if ($LASTEXITCODE -ne 0) {
         Write-Host "警告: SVG 嵌入失败" -ForegroundColor Yellow
     }
 
-    # 列表两端对齐（独立步骤）
-    python '.\patch_list_align.py' $outputFile $outputFile
+    python '.\patch_list_align.py' $workDir $workDir
     if ($LASTEXITCODE -ne 0) {
         Write-Host "警告: 列表对齐修复失败" -ForegroundColor Yellow
     }
 
-    # 移除 Heading 1 强制分页（独立步骤）
-    python '.\patch_heading_style.py' $outputFile $outputFile
+    python '.\patch_heading_style.py' $workDir $workDir
     if ($LASTEXITCODE -ne 0) {
         Write-Host "警告: 标题样式修复失败" -ForegroundColor Yellow
     }
 
+    # ── 打包回 docx，供 python-docx 补丁使用 ──
+    Remove-Item $outputFile -ErrorAction SilentlyContinue
+    python -c "import zipfile,os; z=zipfile.ZipFile('$outputFile','w',zipfile.ZIP_DEFLATED); [z.write(os.path.join(r,f), os.path.relpath(os.path.join(r,f),'$workDir').replace('\\','/')) for r,_,fs in os.walk('$workDir') for f in fs]; z.close()"
+    Remove-Item $workDir -Recurse -ErrorAction SilentlyContinue
+
+    # ── python-docx 补丁：操作 docx 文件 ──
     python '.\patch_figure_caption.py' $outputFile $outputFile
     if ($LASTEXITCODE -eq 0) {
         python '.\patch_table_caption.py' $outputFile $outputFile

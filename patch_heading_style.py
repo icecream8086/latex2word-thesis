@@ -32,18 +32,25 @@ def patch_heading_style(input_path: str, output_path: str) -> bool:
         print(f"错误: 文件不存在: {input_path}", file=sys.stderr)
         return False
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp = Path(tmpdir)
-
+    # 目录模式：直接操作；文件模式：解压到临时目录
+    is_file_mode = not input_path.is_dir()
+    if is_file_mode:
+        tmpdir_obj = tempfile.TemporaryDirectory()
+        tmp = Path(tmpdir_obj.name)
         with zipfile.ZipFile(input_path, 'r') as z:
             z.extractall(tmp)
+        need_cleanup = True
+    else:
+        tmp = input_path
+        need_cleanup = False
 
+    try:
         sty_path = tmp / 'word' / 'styles.xml'
         if not sty_path.exists():
             print("错误: 无效的 DOCX 文件（缺少 styles.xml）", file=sys.stderr)
-            if input_path != output_path:
+            if is_file_mode and input_path != output_path:
                 shutil.copy2(str(input_path), str(output_path))
-            return True
+            return False
 
         tree = etree.parse(str(sty_path))
         root = tree.getroot()
@@ -67,23 +74,27 @@ def patch_heading_style(input_path: str, output_path: str) -> bool:
 
         if count == 0:
             print("未找到需要移除的 pageBreakBefore。")
-            if input_path != output_path:
+            if is_file_mode and input_path != output_path:
                 shutil.copy2(str(input_path), str(output_path))
             return True
 
         tree.write(str(sty_path), xml_declaration=True, encoding='UTF-8',
                    standalone=True)
 
-        if output_path.exists():
-            output_path.unlink()
-        with zipfile.ZipFile(str(output_path), 'w', zipfile.ZIP_DEFLATED) as zout:
-            for fpath in sorted(tmp.rglob('*')):
-                if fpath.is_file():
-                    arcname = str(fpath.relative_to(tmp))
-                    zout.write(str(fpath), arcname)
+        if is_file_mode:
+            if output_path.exists():
+                output_path.unlink()
+            with zipfile.ZipFile(str(output_path), 'w', zipfile.ZIP_DEFLATED) as zout:
+                for fpath in sorted(tmp.rglob('*')):
+                    if fpath.is_file():
+                        arcname = str(fpath.relative_to(tmp))
+                        zout.write(str(fpath), arcname)
 
         print(f"完成 -> {output_path}")
         return True
+    finally:
+        if need_cleanup:
+            tmpdir_obj.cleanup()
 
 
 def main():

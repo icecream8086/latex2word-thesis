@@ -32,12 +32,18 @@ def patch_list_align(input_path: str, output_path: str) -> bool:
         print(f"错误: 文件不存在: {input_path}", file=sys.stderr)
         return False
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp = Path(tmpdir)
-
+    is_file_mode = not input_path.is_dir()
+    if is_file_mode:
+        tmpdir_obj = tempfile.TemporaryDirectory()
+        tmp = Path(tmpdir_obj.name)
         with zipfile.ZipFile(input_path, 'r') as z:
             z.extractall(tmp)
+        need_cleanup = True
+    else:
+        tmp = input_path
+        need_cleanup = False
 
+    try:
         doc_path = tmp / 'word' / 'document.xml'
         if not doc_path.exists():
             print("错误: 无效的 DOCX 文件", file=sys.stderr)
@@ -56,7 +62,6 @@ def patch_list_align(input_path: str, output_path: str) -> bool:
             if numPr is None:
                 continue
 
-            # 已经有 jc 的，检查并更新；没有的创建
             jc = pPr.find(f'{{{W}}}jc')
             if jc is not None:
                 if jc.get(f'{{{W}}}val') != 'both':
@@ -69,23 +74,27 @@ def patch_list_align(input_path: str, output_path: str) -> bool:
 
         if count == 0:
             print("未找到需要修改的列表段落。")
-            if input_path != output_path:
+            if is_file_mode and input_path != output_path:
                 shutil.copy2(str(input_path), str(output_path))
             return True
 
         tree.write(str(doc_path), xml_declaration=True, encoding='UTF-8',
                    standalone=True)
 
-        if output_path.exists():
-            output_path.unlink()
-        with zipfile.ZipFile(str(output_path), 'w', zipfile.ZIP_DEFLATED) as zout:
-            for fpath in sorted(tmp.rglob('*')):
-                if fpath.is_file() and fpath.name != '':
-                    arcname = str(fpath.relative_to(tmp))
-                    zout.write(str(fpath), arcname)
+        if is_file_mode:
+            if output_path.exists():
+                output_path.unlink()
+            with zipfile.ZipFile(str(output_path), 'w', zipfile.ZIP_DEFLATED) as zout:
+                for fpath in sorted(tmp.rglob('*')):
+                    if fpath.is_file() and fpath.name != '':
+                        arcname = str(fpath.relative_to(tmp))
+                        zout.write(str(fpath), arcname)
 
         print(f"完成: {count} 个列表段落已改为两端对齐 -> {output_path}")
         return True
+    finally:
+        if need_cleanup:
+            tmpdir_obj.cleanup()
 
 
 def main():
