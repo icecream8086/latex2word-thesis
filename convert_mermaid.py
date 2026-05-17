@@ -2,7 +2,7 @@
 """
 Mermaid 图片编译脚本
 
-将 .mmd 文件编译为 SVG/PNG/PDF，支持手动单次转换和自动监听模式。
+将 .mmd 文件编译为 SVG/PNG，支持手动单次转换和自动监听模式。
 使用 mermaid-cli (mmdc) 进行渲染。
 
 用法:
@@ -148,20 +148,18 @@ def _run_mmdc(mmd_file: Path, output_file: Path, theme: str = "default",
 def convert_single(mmd_file: Path, output_format: str = "png",
                    theme: str = "default", bg_color: str = "white",
                    width: int = None, height: int = None,
-                   charset: str = "UTF-8",
-                   with_pdf: bool = False) -> bool:
+                   charset: str = "UTF-8") -> bool:
     """
     编译单个 mmd 文件，返回是否成功。
 
     参数:
         mmd_file: mmd 源文件路径
-        output_format: 输出格式（png/svg/pdf/both，both 表示同时输出 SVG+PNG）
+        output_format: 输出格式（png/svg/both，both 表示同时输出 SVG+PNG）
         theme: Mermaid 主题
         bg_color: 背景色
         width: 输出图片宽度（像素）
         height: 输出图片高度（像素）
         charset: 源文件编码（仅用于校验提示，mmdc 自身处理文件读取）
-        with_pdf: 是否额外输出 PDF 格式
     """
     # 预检源文件编码，提前给出明确提示
     if charset.upper() != "UTF-8":
@@ -183,19 +181,10 @@ def convert_single(mmd_file: Path, output_format: str = "png",
                            theme, bg_color, width, height)
         ok_png = _run_mmdc(mmd_file, mmd_file.with_suffix(".png"),
                            theme, bg_color, width, height)
-        ok_pdf = True
-        if with_pdf:
-            ok_pdf = _run_mmdc(mmd_file, mmd_file.with_suffix(".pdf"),
-                               theme, bg_color, width, height)
-        return ok_svg and ok_png and ok_pdf
+        return ok_svg and ok_png
 
     output_file = mmd_file.with_suffix(f".{output_format}")
     ok = _run_mmdc(mmd_file, output_file, theme, bg_color, width, height)
-
-    if with_pdf and output_format != "pdf":
-        ok_pdf = _run_mmdc(mmd_file, mmd_file.with_suffix(".pdf"),
-                           theme, bg_color, width, height)
-        return ok and ok_pdf
 
     return ok
 
@@ -203,8 +192,7 @@ def convert_single(mmd_file: Path, output_format: str = "png",
 def convert_all(mmd_files: list[Path], output_format: str = "png",
                 theme: str = "default", bg_color: str = "white",
                 width: int = None, height: int = None,
-                charset: str = "UTF-8",
-                with_pdf: bool = False) -> tuple[int, int]:
+                charset: str = "UTF-8") -> tuple[int, int]:
     """编译一批 mmd 文件，返回 (成功数, 总数)。"""
     success = 0
     total = len(mmd_files)
@@ -214,7 +202,7 @@ def convert_all(mmd_files: list[Path], output_format: str = "png",
         return 0, 0
 
     for f in mmd_files:
-        ok = convert_single(f, output_format, theme, bg_color, width, height, charset, with_pdf)
+        ok = convert_single(f, output_format, theme, bg_color, width, height, charset)
         if ok:
             success += 1
         if not ok and total == 1:
@@ -228,8 +216,7 @@ def convert_all(mmd_files: list[Path], output_format: str = "png",
 def watch_mode(project_root: Path, interval: float = 2.0,
                output_format: str = "png", theme: str = "default",
                bg_color: str = "white", width: int = None, height: int = None,
-               charset: str = "UTF-8",
-               with_pdf: bool = False):
+               charset: str = "UTF-8"):
     """
     监听模式：轮询 mmd 文件变更，有变动时自动编译。
     """
@@ -260,7 +247,7 @@ def watch_mode(project_root: Path, interval: float = 2.0,
             if changed:
                 safe_print(f"\n检测到 {len(changed)} 个文件变更:")
                 for f in changed:
-                    ok = convert_single(f, output_format, theme, bg_color, width, height, charset, with_pdf)
+                    ok = convert_single(f, output_format, theme, bg_color, width, height, charset)
                     status = "成功" if ok else "失败"
                     safe_print(f"  [{status}] {f}")
 
@@ -312,7 +299,7 @@ def main():
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
     parser = argparse.ArgumentParser(
-        description="Mermaid 图片编译工具 — 将 .mmd 编译为 SVG/PNG/PDF",
+        description="Mermaid 图片编译工具 — 将 .mmd 编译为 SVG/PNG",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "示例:\n"
@@ -330,7 +317,7 @@ def main():
     parser.add_argument("--file", "-f", type=str, default=None,
                         help="编译指定 mmd 文件（而非全部）")
     parser.add_argument("--format", type=str, default=DEFAULT_OUTPUT_FORMAT,
-                        choices=["png", "svg", "pdf", "both"],
+                        choices=["png", "svg", "both"],
                         help=f"输出格式（默认: {DEFAULT_OUTPUT_FORMAT}，both 表示同时输出 SVG+PNG）")
     parser.add_argument("--theme", "-t", type=str, default=DEFAULT_THEME,
                         choices=["default", "dark", "neutral", "forest", "base"],
@@ -345,8 +332,6 @@ def main():
                         help="监听模式轮询间隔（秒，默认: 2.0）")
     parser.add_argument("--charset", "-c", type=str, default="UTF-8",
                         help="mmd 源文件编码（默认: UTF-8，GBK 终端可设为 GBK）")
-    parser.add_argument("--no-pdf", action="store_true",
-                        help="跳过 PDF 输出")
     parser.add_argument("--check-encoding", action="store_true",
                         help="检查所有 mmd 文件的编码并给出警告")
 
@@ -376,8 +361,7 @@ def main():
             sys.exit(1)
         safe_print(f"正在编译: {mmd_file} -> {args.format} (编码: {charset})")
         success = convert_single(mmd_file, args.format, args.theme,
-                                  args.background, args.width, args.height, charset,
-                                  not args.no_pdf)
+                                  args.background, args.width, args.height, charset)
         if success:
             safe_print("完成。")
         else:
@@ -387,8 +371,7 @@ def main():
     # 监听模式
     if args.watch:
         watch_mode(project_root, args.interval, args.format, args.theme,
-                   args.background, args.width, args.height, charset,
-                   not args.no_pdf)
+                   args.background, args.width, args.height, charset)
         return
 
     # 默认：编译所有
@@ -405,8 +388,7 @@ def main():
         check_and_warn_encoding(mmd_files)
 
     success, total = convert_all(mmd_files, args.format, args.theme,
-                                  args.background, args.width, args.height, charset,
-                                  not args.no_pdf)
+                                  args.background, args.width, args.height, charset)
     safe_print(f"完成: {success}/{total} 个文件编译成功。")
 
     if success < total:

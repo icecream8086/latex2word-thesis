@@ -2,7 +2,7 @@
 """
 sciplot 图片编译脚本
 
-将 figures/sciplot/ 下的 Python 绘图脚本编译为 SVG/PNG/PDF 图片。
+将 figures/sciplot/ 下的 Python 绘图脚本编译为 SVG/PNG 图片。
 每个脚本创建自己的图表并调用 sp.savefig() 输出到同目录。
 
 用法:
@@ -46,7 +46,7 @@ def find_plot_scripts(project_root: Path) -> list[Path]:
 
 
 def execute_single(script_path: Path, output_format: str = "svg",
-                   with_png: bool = True, with_pdf: bool = True) -> bool:
+                   with_png: bool = True) -> bool:
     """
     执行单个绘图脚本。通过修改 __file__ 让脚本正确找到输出目录。
 
@@ -83,11 +83,6 @@ def execute_single(script_path: Path, output_format: str = "svg",
 
         exec(compile(source, str(script_path), "exec"), context)
 
-        # 额外输出 PDF 格式（默认启用，--no-pdf 关闭）
-        if with_pdf and output_format != "pdf":
-            os.environ["SCIPLOT_FORMAT"] = "pdf"
-            exec(compile(source, str(script_path), "exec"), context)
-
         # 额外输出 PNG 格式（默认启用，--no-png 关闭）
         if with_png and output_format != "png":
             os.environ["SCIPLOT_FORMAT"] = "png"
@@ -112,7 +107,7 @@ def execute_single(script_path: Path, output_format: str = "svg",
 
 
 def execute_all(scripts: list[Path], output_format: str = "svg",
-                with_png: bool = True, with_pdf: bool = True) -> tuple[int, int]:
+                with_png: bool = True) -> tuple[int, int]:
     """执行一批脚本，返回 (成功数, 总数)。"""
     success = 0
     total = len(scripts)
@@ -122,7 +117,7 @@ def execute_all(scripts: list[Path], output_format: str = "svg",
         return 0, 0
 
     for f in scripts:
-        ok = execute_single(f, output_format, with_png, with_pdf)
+        ok = execute_single(f, output_format, with_png)
         if ok:
             success += 1
         if not ok and total == 1:
@@ -135,7 +130,7 @@ def execute_all(scripts: list[Path], output_format: str = "svg",
 
 def watch_mode(project_root: Path, interval: float = 2.0,
                output_format: str = "svg",
-               with_png: bool = True, with_pdf: bool = True):
+               with_png: bool = True):
     """监听模式：轮询脚本变更，有变动时自动执行。"""
     def get_snapshot() -> dict[Path, float]:
         return {f: f.stat().st_mtime for f in find_plot_scripts(project_root)
@@ -164,7 +159,7 @@ def watch_mode(project_root: Path, interval: float = 2.0,
             if changed:
                 print(f"\n检测到 {len(changed)} 个文件变更:")
                 for f in changed:
-                    ok = execute_single(f, output_format, with_png, with_pdf)
+                    ok = execute_single(f, output_format, with_png)
                     status = "成功" if ok else "失败"
                     print(f"  [{status}] {f}")
 
@@ -183,7 +178,7 @@ def watch_mode(project_root: Path, interval: float = 2.0,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="sciplot 图片编译工具 — 将 Python 绘图脚本编译为 SVG/PNG/PDF",
+        description="sciplot 图片编译工具 — 将 Python 绘图脚本编译为 SVG/PNG",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "示例:\n"
@@ -198,10 +193,8 @@ def main():
     parser.add_argument("--file", "-f", type=str, default=None,
                         help="编译指定脚本（而非全部）")
     parser.add_argument("--format", type=str, default="svg",
-                        choices=["svg", "png", "pdf"],
+                        choices=["svg", "png"],
                         help="输出格式（默认: svg）")
-    parser.add_argument("--no-pdf", action="store_true",
-                        help="跳过 PDF 输出")
     parser.add_argument("--no-png", action="store_true",
                         help="跳过 PNG 输出")
     parser.add_argument("--interval", "-i", type=float, default=2.0,
@@ -221,7 +214,7 @@ def main():
             print(f"错误: 文件不存在: {script_file}", file=sys.stderr)
             sys.exit(1)
         print(f"正在编译: {script_file} -> {args.format}")
-        success = execute_single(script_file, args.format, not args.no_png, not args.no_pdf)
+        success = execute_single(script_file, args.format, not args.no_png)
         if success:
             print("完成。")
         else:
@@ -230,7 +223,7 @@ def main():
 
     # 监听模式
     if args.watch:
-        watch_mode(project_root, args.interval, args.format, not args.no_png, not args.no_pdf)
+        watch_mode(project_root, args.interval, args.format, not args.no_png)
         return
 
     # 默认：编译所有
@@ -243,7 +236,7 @@ def main():
     print(f"正在编译 {len(scripts)} 个 sciplot 绘图脚本...")
     print(f"输出格式: {args.format}")
 
-    success, total = execute_all(scripts, args.format, not args.no_png, not args.no_pdf)
+    success, total = execute_all(scripts, args.format, not args.no_png)
     print(f"完成: {success}/{total} 个脚本编译成功。")
 
     if success < total:

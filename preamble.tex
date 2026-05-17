@@ -48,6 +48,10 @@
 % ---------- 图片格式 ----------
 % XeLaTeX 编译用 png（\includegraphics 不支持 svg），
 % Pandoc 转 Word 时可改为 svg（Word 原生支持 svg 嵌入）
+% 注意：不能用 \renewcommand{\includegraphics} 做内联替换，
+%       Pandoc 展开不了 TeX 宏，会导致 Word 中所有图片丢失。
+%       仅有的两个 .svg 引用（02.introduce.tex:14, 05.systematic_design.tex:20）
+%       编译 XeLaTeX 前手动改为 .png 即可。
 \newcommand{\imageformat}{png}
 
 % ---------- 段落缩进 ----------

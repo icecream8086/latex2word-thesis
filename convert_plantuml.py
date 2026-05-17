@@ -113,44 +113,6 @@ def _run_plantuml(jar: Path, puml_file: Path, check_metadata: bool,
         return False
 
 
-def _convert_svg_to_pdf(svg_path: Path, pdf_path: Path) -> bool:
-    """将 SVG 文件转换为 PDF，支持 cairosvg 和 svglib 两种后端。"""
-    svg_path = Path(svg_path)
-    pdf_path = Path(pdf_path)
-
-    if not svg_path.exists():
-        print(f"  [错误] SVG 文件不存在: {svg_path}", file=sys.stderr)
-        return False
-
-    # 优先使用 cairosvg
-    try:
-        import cairosvg
-        cairosvg.svg2pdf(url=str(svg_path), write_to=str(pdf_path))
-        print(f"  [成功] {svg_path.name} -> {pdf_path.name}")
-        return True
-    except ImportError:
-        pass
-
-    # 备选 svglib + reportlab（纯 Python，无需 C 扩展）
-    try:
-        from svglib.svglib import svg2rlg
-        from reportlab.graphics import renderPDF
-        drawing = svg2rlg(str(svg_path))
-        if drawing is None:
-            print(f"  [失败] {svg_path.name}: svglib 无法解析此 SVG", file=sys.stderr)
-            return False
-        renderPDF.drawToFile(drawing, str(pdf_path))
-        print(f"  [成功] {svg_path.name} -> {pdf_path.name}")
-        return True
-    except ImportError:
-        pass
-
-    print(f"  [错误] 无法将 SVG 转换为 PDF，请安装:", file=sys.stderr)
-    print(f"          pip install cairosvg", file=sys.stderr)
-    print(f"         或 pip install svglib reportlab", file=sys.stderr)
-    return False
-
-
 def _generate_empty_drawio(drawio_path: Path) -> bool:
     """生成空白 drawio 占位文件，方便在 draw.io 中手动编辑。"""
     drawio_xml = '''<?xml version="1.0" encoding="UTF-8"?>
@@ -193,8 +155,7 @@ def export_drawio(puml_files: list[Path],
 
 
 def convert_single(jar: Path, puml_file: Path, check_metadata: bool = True,
-                   charset: str = "UTF-8", output_format: str = "svg",
-                   with_pdf: bool = False) -> bool:
+                   charset: str = "UTF-8", output_format: str = "svg") -> bool:
     """
     编译单个 puml 文件，返回是否成功。
 
@@ -204,7 +165,6 @@ def convert_single(jar: Path, puml_file: Path, check_metadata: bool = True,
         check_metadata: 是否检查元数据（增量编译）
         charset: 源文件编码（默认 UTF-8）
         output_format: 输出格式（png/svg/both，默认 svg）
-        with_pdf: 是否额外输出 PDF 格式
     """
     # 预检源文件编码
     try:
@@ -222,29 +182,16 @@ def convert_single(jar: Path, puml_file: Path, check_metadata: bool = True,
     if output_format == "both":
         ok_svg = _run_plantuml(jar, puml_file, check_metadata, charset, "svg")
         ok_png = _run_plantuml(jar, puml_file, check_metadata, charset, "png")
-        ok_pdf = True
-        if with_pdf:
-            ok_pdf = _convert_svg_to_pdf(puml_file.with_suffix(".svg"),
-                                         puml_file.with_suffix(".pdf"))
-        return ok_svg and ok_png and ok_pdf
+        return ok_svg and ok_png
 
     ok = _run_plantuml(jar, puml_file, check_metadata, charset, output_format)
-
-    if with_pdf and output_format != "pdf":
-        # PNG 格式没有 SVG 文件，需要先生成 SVG 再转 PDF
-        if output_format == "png":
-            _run_plantuml(jar, puml_file, check_metadata, charset, "svg")
-        ok_pdf = _convert_svg_to_pdf(puml_file.with_suffix(".svg"),
-                                     puml_file.with_suffix(".pdf"))
-        return ok and ok_pdf
 
     return ok
 
 
 def convert_all(jar: Path, puml_files: list[Path],
                 check_metadata: bool = True, charset: str = "UTF-8",
-                output_format: str = "svg",
-                with_pdf: bool = False) -> tuple[int, int]:
+                output_format: str = "svg") -> tuple[int, int]:
     """编译一批 puml 文件，返回 (成功数, 总数)。"""
     success = 0
     total = len(puml_files)
@@ -254,7 +201,7 @@ def convert_all(jar: Path, puml_files: list[Path],
         return 0, 0
 
     for f in puml_files:
-        ok = convert_single(jar, f, check_metadata, charset, output_format, with_pdf)
+        ok = convert_single(jar, f, check_metadata, charset, output_format)
         if ok:
             success += 1
         # 单文件模式：失败时直接退出
@@ -269,7 +216,6 @@ def convert_all(jar: Path, puml_files: list[Path],
 def watch_mode(jar: Path, project_root: Path, interval: float = 2.0,
                check_metadata: bool = True, charset: str = "UTF-8",
                output_format: str = "svg",
-               with_pdf: bool = False,
                drawio: bool = False,
                ignore_set: set | None = None):
     """
@@ -306,7 +252,7 @@ def watch_mode(jar: Path, project_root: Path, interval: float = 2.0,
             if changed:
                 print(f"\n检测到 {len(changed)} 个文件变更:")
                 for f in changed:
-                    ok = convert_single(jar, f, check_metadata, charset, output_format, with_pdf)
+                    ok = convert_single(jar, f, check_metadata, charset, output_format)
                     status = "成功" if ok else "失败"
                     print(f"  [{status}] {f}")
                     if ok and drawio:
@@ -384,8 +330,6 @@ def main():
                         help="监听模式轮询间隔（秒，默认: 2.0）")
     parser.add_argument("--charset", "-c", type=str, default="UTF-8",
                         help="puml 源文件编码（默认: UTF-8）")
-    parser.add_argument("--no-pdf", action="store_true",
-                        help="跳过 PDF 输出")
     parser.add_argument("--check-encoding", action="store_true",
                         help="检查所有 puml 文件的编码并给出警告")
     parser.add_argument("--drawio", action="store_true",
@@ -420,7 +364,7 @@ def main():
             print(f"错误: 文件不存在: {puml_file}", file=sys.stderr)
             sys.exit(1)
         print(f"正在编译: {puml_file} -> {args.format} (编码: {charset})")
-        success = convert_single(jar, puml_file, check_metadata, charset, args.format, not args.no_pdf)
+        success = convert_single(jar, puml_file, check_metadata, charset, args.format)
         if success and args.drawio:
             export_drawio([puml_file], ignore_set)
         if success:
@@ -440,7 +384,7 @@ def main():
 
     # 监听模式
     if args.watch:
-        watch_mode(jar, project_root, args.interval, check_metadata, charset, args.format, not args.no_pdf, drawio=args.drawio, ignore_set=ignore_set)
+        watch_mode(jar, project_root, args.interval, check_metadata, charset, args.format, drawio=args.drawio, ignore_set=ignore_set)
         return
 
     # 默认：编译所有
@@ -456,7 +400,7 @@ def main():
     # 可选：先检查编码（非侵入式）
     check_and_warn_encoding(puml_files)
 
-    success, total = convert_all(jar, puml_files, check_metadata, charset, args.format, not args.no_pdf)
+    success, total = convert_all(jar, puml_files, check_metadata, charset, args.format)
 
     # Drawio 导出
     if args.drawio and success > 0:

@@ -11,9 +11,9 @@ if (Test-Path $tempFile) {
     exit 1
 }
 
-# 编译 figures 目录下所有 puml 文件为 svg，并额外导出 drawio
+# 编译 figures 目录下所有 puml 文件为 svg+png，并额外导出 drawio
 Write-Host "正在编译 PlantUML 图片...可能略慢" -ForegroundColor Green
-python .\convert_plantuml.py --format svg --drawio
+python .\convert_plantuml.py --format both --drawio
 if ($LASTEXITCODE -ne 0) {
     Write-Host "警告: PlantUML 编译失败，请检查 Java 环境和 puml 文件语法" -ForegroundColor Yellow
 }
@@ -48,6 +48,7 @@ $jsonTemp = "temp_refs.json"
 pandoc main.tex -t json `
   --reference-doc=ref.docx `
   --filter .\pandoc_tex_numbering_filter.cmd `
+  --lua-filter .\png_to_svg.lua `
   --citeproc `
   --bibliography=bibl/fake_ref.bib `
   --csl=bibl/gb7714-2015-numeric.csl `
@@ -94,6 +95,12 @@ if ($stage1Success) {
 Remove-Item $jsonTemp -ErrorAction SilentlyContinue
 
 if ($stage2Success) {
+    # SVG 内嵌（独立步骤，失败不阻塞后续补丁链）
+    python '.\patch_embed_svg.py' $outputFile $outputFile
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "警告: SVG 嵌入失败" -ForegroundColor Yellow
+    }
+
     python '.\patch_figure_caption.py' $outputFile $outputFile
     if ($LASTEXITCODE -eq 0) {
         python '.\patch_table_caption.py' $outputFile $outputFile
