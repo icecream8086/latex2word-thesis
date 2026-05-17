@@ -101,6 +101,18 @@ if ($stage2Success) {
         Write-Host "警告: SVG 嵌入失败" -ForegroundColor Yellow
     }
 
+    # 列表两端对齐（独立步骤）
+    python '.\patch_list_align.py' $outputFile $outputFile
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "警告: 列表对齐修复失败" -ForegroundColor Yellow
+    }
+
+    # 移除 Heading 1 强制分页（独立步骤）
+    python '.\patch_heading_style.py' $outputFile $outputFile
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "警告: 标题样式修复失败" -ForegroundColor Yellow
+    }
+
     python '.\patch_figure_caption.py' $outputFile $outputFile
     if ($LASTEXITCODE -eq 0) {
         python '.\patch_table_caption.py' $outputFile $outputFile

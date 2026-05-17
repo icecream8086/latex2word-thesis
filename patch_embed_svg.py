@@ -118,8 +118,9 @@ def embed_svg(input_path: str, output_path: str) -> bool:
 
         if not svg_rels:
             print("未找到需要替换的 SVG 图片。")
-            # 仍然写出文件（保持一致性）
-            shutil.copy2(str(input_path), str(output_path))
+            # 没有需要替换的 SVG，input==output 时无需复制
+            if input_path != output_path:
+                shutil.copy2(str(input_path), str(output_path))
             return True
 
         # 更新 word/_rels/document.xml.rels

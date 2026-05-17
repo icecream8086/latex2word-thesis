@@ -84,7 +84,12 @@
     []
 
 % ---------- 标题格式（严格遵循学校规范） ----------
-% 一级标题：小2号黑体，加粗，居中，新页开始，序号后空1字符
+% 一级标题：小2号黑体，加粗，居中，序号后空1字符
+% 注意：\newpage 在这里只对 XeLaTeX/PDF 生效。
+%       Pandoc 转 Word 时不解析 LaTeX 的 \newpage，
+%       Section 强制分页由 ref.docx 中 Heading 1 样式控制。
+%       out.ps1 -> patch_heading_style.py 会在生成 DOCX 后移除该分页，
+%       避免短章节间出现空白页。如需手动分页，在 \section 前加 \newpage。
 \titleformat{\section}
     {\newpage\centering\heiti\zihao{-2}\bfseries}
     {\thesection}{1em}{}
