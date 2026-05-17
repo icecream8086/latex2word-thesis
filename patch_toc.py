@@ -350,6 +350,15 @@ def add_toc(doc_path, output_path=None):
     toc_field_para = _create_toc_field_para()
     toc_para.addnext(toc_field_para)
 
+    # 5. 在 TOC 域后插入分页符（目录和正文之间分页）
+    pb_para = OxmlElement('w:p')
+    pb_run = OxmlElement('w:r')
+    pb_br = OxmlElement('w:br')
+    pb_br.set(qn('w:type'), 'page')
+    pb_run.append(pb_br)
+    pb_para.append(pb_run)
+    toc_field_para.addnext(pb_para)
+
     doc.save(out_path)
     print(f"  添加了 {len(headings)} 个书签和 TOC 域代码")
 
