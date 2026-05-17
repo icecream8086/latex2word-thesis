@@ -235,6 +235,10 @@ def _patch_toc_styles(zip_content):
         sp.set(f'{{{NS_W}}}before', '0')
         sp.set(f'{{{NS_W}}}after', '0')
 
+        # 两端对齐（刷新 TOC 后保持两端对齐）
+        jc = etree.SubElement(ppr, f'{{{NS_W}}}jc')
+        jc.set(f'{{{NS_W}}}val', 'both')
+
         # indent
         ind = etree.SubElement(ppr, f'{{{NS_W}}}ind')
         ind.set(f'{{{NS_W}}}left', cfg['indent'])
@@ -267,7 +271,7 @@ def _patch_toc_styles(zip_content):
                 etree.SubElement(rpr, f'{{{NS_W}}}{btag}')
 
     zip_content['word/styles.xml'] = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
-    print('  已修补 toc 1/2/3 样式（宋体小四、加粗、点前导符、1.5倍行距）')
+    print('  已修补 toc 1/2/3 样式（宋体小四、加粗、两端对齐、点前导符、1.5倍行距）')
 
 
 def add_toc(doc_path, output_path=None):
@@ -315,7 +319,7 @@ def add_toc(doc_path, output_path=None):
     if cleared:
         print(f"  清除 {cleared} 个旧段落")
 
-    # 3. 扫描标题，添加书签
+    # 3. 扫描标题，添加书签 + 显式 outlineLvl
     headings = []
     for p in body.iterchildren(_W('p')):
         text = _get_para_text(p)
@@ -334,6 +338,13 @@ def add_toc(doc_path, output_path=None):
         if _is_toc_heading(text):
             continue
         headings.append((p, text, level))
+
+        # 确保段落 pPr 中有显式 outlineLvl（某些 Word 版本需要才能在 TOC 中识别）
+        ol = pPr.find(_W('outlineLvl'))
+        if ol is None:
+            ol = OxmlElement('w:outlineLvl')
+            pPr.append(ol)
+        ol.set(_W('val'), str(level - 1))
 
     # 为每个标题创建唯一书签
     seen_labels = set()

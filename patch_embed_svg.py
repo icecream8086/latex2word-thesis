@@ -91,17 +91,39 @@ def embed_svg(input_path: str, output_path: str) -> bool:
             old_target = rel_map[rid]
             if not old_target.startswith('media/'):
                 continue
-            graphic = blip.find(f'../../../..')
-            if graphic is not None:
-                container = graphic.getparent()
-                doc_pr = container.find(f'{{{NS["wp"]}}}docPr')
+
+            # 从 a:blip 向上走到 pic:pic，获取 cNvPr 中的 descr
+            # a:blip → pic:blipFill → pic:pic → a:graphicData → a:graphic
+            elem = blip
+            pic_pic = None
+            for _ in range(4):
+                parent = elem.getparent()
+                if parent is None:
+                    break
+                elem = parent
             else:
-                doc_pr = None
-            if doc_pr is None:
+                # elem 现在是 a:graphic，往下找 pic:pic
+                for child in elem.iterchildren():
+                    tag = child.tag.split('}')[1] if '}' in child.tag else child.tag
+                    if tag == 'graphicData':
+                        for gchild in child.iterchildren():
+                            gtag = gchild.tag.split('}')[1] if '}' in gchild.tag else gchild.tag
+                            if gtag == 'pic':
+                                pic_pic = gchild
+                                break
+                        break
+
+            if pic_pic is None:
                 continue
-            descr = doc_pr.get('descr', '')
+
+            # 在 pic:pic 中找 pic:nvPicPr/pic:cNvPr/@descr
+            cnv_pr = pic_pic.find(f'{{{NS["pic"]}}}nvPicPr/{{{NS["pic"]}}}cNvPr')
+            if cnv_pr is None:
+                continue
+            descr = cnv_pr.get('descr', '')
             if not descr.endswith('.svg'):
                 continue
+
             svg_src = Path(descr)
             if not svg_src.exists():
                 print(f"  [跳过] SVG 不存在: {descr}", file=sys.stderr)

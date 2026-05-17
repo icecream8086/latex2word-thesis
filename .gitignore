@@ -35,3 +35,6 @@ main.synctex(busy)
 *.drawio
 
 CLAUDE.md
+
+unpack_fixed
+unpack_fresh

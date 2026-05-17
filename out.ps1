@@ -163,6 +163,9 @@ if ($stage2Success) {
         python '.\patch_header.py' $outputFile $outputFile
     }
     if ($LASTEXITCODE -eq 0) {
+        python '.\patch_justify.py' $outputFile $outputFile
+    }
+    if ($LASTEXITCODE -eq 0) {
         Start-Process .\$outputFile
     }
 } else {
