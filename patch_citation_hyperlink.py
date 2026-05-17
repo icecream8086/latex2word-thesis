@@ -1,9 +1,11 @@
 """
-patch_citation_hyperlink.py - 将参考文献引用标记 [N] 转换为可点击超链接
+patch_citation_hyperlink.py - 参考文献引用标记与正文之间的双向超链接
 
 功能：
-  1. 为参考文献列表中每条 [N] 条目添加书签 _CiteRef_N
-  2. 扫描正文段落，将 [N] 样式引用标记转为指向该书签的超链接
+  1. 将正文中的引用标记 [N] 转换为指向参考文献列表条目的超链接（正向）
+  2. 在首次出现 [N] 的正文位置添加书签 _BackToCite_N
+  3. 将参考文献条目中的 [N] 转换为指向正文首次引用位置的超链接（反向）
+  4. 为参考文献条目添加书签 _CiteRef_N
 
 依赖：python-docx
 用法：python patch_citation_hyperlink.py <输入文件> [输出文件]
@@ -19,10 +21,16 @@ from docx.oxml import OxmlElement
 
 W = qn
 CITE_PAT = re.compile(r'\[(\d+(?:\s*[, \-]\s*\d+)*)\]')
+_BM_COUNTER = [0]  # 全局书签 ID 计数器
+
+
+def _next_bm_id() -> str:
+    _BM_COUNTER[0] += 1
+    return str(_BM_COUNTER[0])
 
 
 def _add_bookmark(p, name):
-    """为段落添加书签"""
+    """为段落添加书签（保留现有 ID）"""
     ids = set()
     for bs in p.iter(W('w:bookmarkStart')):
         try:
@@ -56,7 +64,6 @@ def _make_hyperlink(anchor, text, rpr=None):
     hl.set(W('w:history'), '1')
     r = OxmlElement('w:r')
 
-    # 从原始 rPr 复制字体属性，但剔除 color/underline → 超链接文字继承正文字体
     if rpr is not None:
         clean_rpr = copy.deepcopy(rpr)
         for tag in ('w:color', 'w:u', 'w:uColor'):
@@ -75,6 +82,27 @@ def _make_hyperlink(anchor, text, rpr=None):
     return hl
 
 
+def _make_hyperlink_with_bookmark(anchor, back_name, text, rpr=None):
+    """创建 hyperlink 并包裹书签：用于首次引用（正文→文献、文献→正文双向锚点）"""
+    hl = _make_hyperlink(anchor, text, rpr)
+    if back_name is None:
+        return hl
+
+    bid = _next_bm_id()
+    bms = OxmlElement('w:bookmarkStart')
+    bms.set(W('w:id'), bid)
+    bms.set(W('w:name'), back_name)
+    bme = OxmlElement('w:bookmarkEnd')
+    bme.set(W('w:id'), bid)
+
+    # 返回容器：书签 start + hyperlink + 书签 end
+    container = OxmlElement('w:r')  # 仅作为占位容器
+    container.append(bms)
+    container.append(hl)
+    container.append(bme)
+    return container
+
+
 def _make_run(text, rpr=None):
     """创建 w:r > w:t"""
     r = OxmlElement('w:r')
@@ -87,8 +115,10 @@ def _make_run(text, rpr=None):
     return r
 
 
+# ── 正文引用 → 参考文献（正向） ──
+
 def add_entry_bookmarks(doc):
-    """为参考文献列表中的每条 [N] 条目添加书签"""
+    """为参考文献列表中的每条 [N] 条目添加书签 _CiteRef_N"""
     in_bib = False
     n = 0
     for para in doc.paragraphs:
@@ -105,8 +135,12 @@ def add_entry_bookmarks(doc):
     return n
 
 
-def _convert_para(p):
-    """将单个段落中的引用标记转为超链接，返回 True 表示有修改"""
+def _convert_para(p, first_seen):
+    """
+    将单个段落中的引用标记转为超链接。
+    首次出现的引用额外包裹 _BackToCite_N 书签。
+    返回 True 表示有修改。
+    """
     children = list(p.iterchildren())
 
     runs_info = []
@@ -175,7 +209,17 @@ def _convert_para(p):
             if seg_type[0] == 'text':
                 new_children.append(_make_run(seg_text, rpr))
             else:
-                new_children.append(_make_hyperlink(f'_CiteRef_{num}', seg_text, rpr))
+                anchor = f'_CiteRef_{num}'
+                back_name = None
+                if num not in first_seen:
+                    first_seen.add(num)
+                    back_name = f'_BackToCite_{num}'
+
+                container = _make_hyperlink_with_bookmark(anchor, back_name, seg_text, rpr)
+                # 展开容器中的子元素
+                for sub in list(container):
+                    container.remove(sub)
+                    new_children.append(sub)
 
     for child in list(p):
         p.remove(child)
@@ -185,8 +229,8 @@ def _convert_para(p):
     return True
 
 
-def convert_para_citations(doc):
-    """将正文段落中引用标记转为超链接"""
+def convert_para_citations(doc, first_seen):
+    """将正文段落中引用标记转为超链接，首次引用加书签"""
     in_bib = False
     n = 0
     for para in doc.paragraphs:
@@ -197,24 +241,100 @@ def convert_para_citations(doc):
             continue
         if not CITE_PAT.search(para.text):
             continue
-        if _convert_para(para._element):
+        if _convert_para(para._element, first_seen):
             n += 1
     return n
 
 
+# ── 参考文献 → 正文（反向） ──
+
+def add_bibliography_backlinks(doc, first_seen):
+    """
+    将参考文献条目开头的 [N] 转换为指向正文首次引用位置的超链接。
+    需要 first_seen 集合得知哪些编号在正文中被引用过。
+    """
+    in_bib = False
+    count = 0
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if text == '参考文献':
+            in_bib = True
+            continue
+        if not in_bib or not text:
+            continue
+
+        m = re.match(r'^(\[(\d+)\])', text)
+        if not m:
+            continue
+
+        num = int(m.group(2))
+        back_name = f'_BackToCite_{num}'
+        cite_tag = m.group(1)
+
+        # 该编号在正文中从未被引用 → 无法建立反向链接
+        if num not in first_seen:
+            continue
+
+        p = para._element
+        for r in p.iter(W('w:r')):
+            t = r.find(W('w:t'))
+            if t is None or not t.text:
+                continue
+            if cite_tag not in t.text:
+                continue
+
+            # 找到包含 [N] 的 run → 分割
+            run_text = t.text
+            idx = run_text.index(cite_tag)
+            before = run_text[:idx]
+            after = run_text[idx + len(cite_tag):]
+            rpr = r.find(W('w:rPr'))
+
+            parent = r.getparent()
+            if parent is None:
+                continue
+            pos_in_parent = list(parent).index(r)
+
+            replacements = []
+            if before:
+                replacements.append(_make_run(before, rpr))
+            replacements.append(_make_hyperlink(back_name, cite_tag, rpr))
+            if after:
+                replacements.append(_make_run(after, rpr))
+
+            parent.remove(r)
+            for j, repl in enumerate(replacements):
+                parent.insert(pos_in_parent + j, repl)
+
+            count += 1
+            break  # 一个条目只处理一次
+
+    return count
+
+
+# ── 主入口 ──
+
 def patch_citation_hyperlink(input_path, output_path):
     """主函数"""
     doc = Document(input_path)
+
+    # 第一步：正文引用 → 超链接 + 书签
+    first_seen = set()
+    cn = convert_para_citations(doc, first_seen)
+    print(f'  已转换 {cn} 个段落中的引用标记为超链接')
+
+    # 第二步：参考文献条目书签
     bm = add_entry_bookmarks(doc)
     print(f'  已为 {bm} 个参考文献条目添加书签')
-    cn = convert_para_citations(doc)
-    print(f'  已转换 {cn} 个段落中的引用标记为超链接')
+
+    # 第三步：参考文献 → 正文反向链接
+    bl = add_bibliography_backlinks(doc, first_seen)
+    print(f'  已添加 {bl} 个参考文献反向超链接')
+
     doc.save(output_path)
-    if bm or cn:
-        print(f'  已保存: {output_path}')
-    else:
-        print(f'  无需修改，已保存: {output_path}')
-    return bm + cn
+    print(f'  已保存: {output_path}')
+    return cn
 
 
 if __name__ == '__main__':

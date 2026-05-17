@@ -1,9 +1,22 @@
+"""
+patch_figure_caption.py - 图片标题加粗 + 表格自适应（非破坏性）
+
+用与 patch_table_caption.py 相同的非破坏方式加粗图片标题，
+保留所有 run 结构、超链接和书签，实现 caption ↔ 正文双向跳转。
+
+操作：
+  1. 表格宽度自适应页面
+  2. 图片标题：加粗 + 移除编号后冒号（非破坏性）
+"""
+
 import sys
 import os
 import re
 import zipfile
 import shutil
 from docx import Document
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 
 
 def auto_fit_tables(input_path, output_path):
@@ -15,16 +28,13 @@ def auto_fit_tables(input_path, output_path):
     os.makedirs(tmp_dir, exist_ok=True)
 
     try:
-        # 1. 解压 docx
         with zipfile.ZipFile(input_path, 'r') as zip_in:
             zip_in.extractall(tmp_dir)
 
-        # 2. 修改 document.xml 中的表格属性
         doc_path = os.path.join(tmp_dir, "word", "document.xml")
         with open(doc_path, 'r', encoding='utf-8') as f:
             xml_content = f.read()
 
-        # 将 w:tblW 从 auto/0 改为 100% 页面宽度 (5000 pct = 100%)
         xml_content = re.sub(
             r'<w:tblW\s+w:type="auto"\s+w:w="0"\s*/>',
             '<w:tblW w:w="5000" w:type="pct"/>',
@@ -34,7 +44,6 @@ def auto_fit_tables(input_path, output_path):
         with open(doc_path, 'w', encoding='utf-8') as f:
             f.write(xml_content)
 
-        # 3. 重新打包为 docx
         if os.path.exists(output_path):
             os.remove(output_path)
         with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_out:
@@ -51,79 +60,67 @@ def auto_fit_tables(input_path, output_path):
 
 def fix_figure_caption_bold(input_path, output_path):
     """
-    将文档中所有图片标题样式的段落设置为加粗
-    
-    Args:
-        input_path: 输入文档路径
-        output_path: 输出文档路径
+    非破坏性地将图片标题设为加粗 + 移除编号后冒号。
+    保留 run 结构、超链接、书签等 → 双向交叉引用正常工作。
     """
-    # 1. 打开文档
     doc = Document(input_path)
 
-    # 2. 遍历所有段落，找到图片标题
-    # 常见的图片标题样式名称: "Figure Caption", "图片标题", "Caption", "Image Caption"
     figure_caption_styles = ["Figure Caption", "图片标题", "Caption", "Image Caption"]
-    
+
     modified_count = 0
-    
+
     for paragraph in doc.paragraphs:
         style_name = paragraph.style.name
-        
-        # 检查是否为图片标题样式
-        is_figure_caption = any(style_name == style for style in figure_caption_styles)
-        
-        # 或者通过段落文本特征判断（可选，增强兼容性）
+
+        is_figure_caption = any(style_name == s for s in figure_caption_styles)
+
         if not is_figure_caption:
             text = paragraph.text.lower().strip()
-            # 常见图片标题特征：以"图"、"Figure"、"Fig."等开头
             if text and (text.startswith("图") or text.startswith("figure") or text.startswith("fig.")):
                 is_figure_caption = True
-        
-        if is_figure_caption:
-            # 3. 合并段落内的所有runs，然后重新设置整个段落为加粗
-            if paragraph.runs:
-                # 获取该段落的所有文本
-                full_text = paragraph.text
-                # 移除编号后的冒号，如 "图4.1: " → "图4.1 "
-                full_text = re.sub(r'^(图[\d.]+)[：:]\s*', r'\1 ', full_text)
-                # 清除原有内容
-                paragraph.clear()
-                # 重新添加整个文本，并设置为加粗
-                run = paragraph.add_run(full_text)
-                run.bold = True
-                # 保持原有的段落样式
-                if paragraph.style.name != "Normal":
-                    paragraph.style = style_name
-                modified_count += 1
-    
-    # 4. 保存修改后的文档
+
+        if not is_figure_caption:
+            continue
+
+        # 非破坏性加粗：遍历所有 w:r（含超链接内部的 run）
+        p = paragraph._element
+        for r_elem in p.iter(qn("w:r")):
+            rPr = r_elem.find(qn("w:rPr"))
+            if rPr is None:
+                rPr = OxmlElement("w:rPr")
+                r_elem.insert(0, rPr)
+            if rPr.find(qn("w:b")) is None:
+                rPr.append(OxmlElement("w:b"))
+
+        # 非破坏性冒号移除：将冒号 run 替换为空格（保留图文间距）
+        for run in paragraph.runs:
+            if run.text and re.fullmatch(r'\s*[：:]\s*', run.text):
+                run.text = " "
+
+        modified_count += 1
+
     doc.save(output_path)
     print(f"处理完成，共修改了 {modified_count} 个图片标题")
     print(f"已保存至: {output_path}")
 
+
 if __name__ == "__main__":
-    # 支持命令行参数: python script.py <输入文件> [输出文件]
     if len(sys.argv) < 2:
         print("用法: python fix_figure_caption.py <输入文件> [输出文件]")
-        print("示例: python fix_figure_caption.py input.docx output.docx")
-        print("      python fix_figure_caption.py input.docx  # 自动生成 input_fixed.docx")
+        print("示例: python patch_figure_caption.py input.docx output.docx")
         sys.exit(1)
 
     input_file = sys.argv[1]
 
-    # 如果未提供输出文件，自动生成：原文件名_fixed.docx
     if len(sys.argv) > 2:
         output_file = sys.argv[2]
     else:
         base, ext = os.path.splitext(input_file)
         output_file = f"{base}_fixed{ext}"
 
-    # 检查输入文件是否存在
     if not os.path.exists(input_file):
         print(f"错误: 输入文件不存在 - {input_file}")
         sys.exit(1)
 
-    # 第一步：表格自动适应窗口（替换原来的 autoexec.py）
     auto_fit_tables(input_file, output_file)
-    # 第二步：图片标题加粗
     fix_figure_caption_bold(output_file, output_file)
