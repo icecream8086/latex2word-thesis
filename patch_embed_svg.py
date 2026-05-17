@@ -41,6 +41,15 @@ def embed_svg(input_path: str, output_path: str) -> bool:
         print(f"错误: 文件不存在: {input_path}", file=sys.stderr)
         return False
 
+    # 快速预检：document.xml 中是否含 .svg，不含则跳过全量解压
+    with zipfile.ZipFile(input_path, 'r') as z:
+        doc_xml_raw = z.read('word/document.xml')
+    if b'.svg' not in doc_xml_raw:
+        print("未找到需要替换的 SVG 图片。")
+        if input_path != output_path:
+            shutil.copy2(str(input_path), str(output_path))
+        return True
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
 
